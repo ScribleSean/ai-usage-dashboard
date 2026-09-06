@@ -729,7 +729,7 @@ export default function Home() {
                 <details className="method-note">
                   <summary>What these records cover</summary>
                   <p>
-                    These are existing Antigravity review receipts, not every agent or
+                    These include dynamic Antigravity receipts (coordinators and parallel subagent workers), not every agent or
                     terminal command. One newest snapshot per conversation
                     avoids adding cumulative counters twice. Duration is the
                     latest call, not total conversation time. The selected model

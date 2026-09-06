@@ -15,7 +15,7 @@ The app runs on your computer. It does not send usage records to a hosted servic
 
 Activity offers daily and week-by-hour timelines and a combined Mac and Windows total. Overlapping intervals count once. Simultaneous activity in different categories is labeled Device overlap, since foreground records cannot establish which device had your attention. Tokens offers All, Mac, Ubuntu and Windows views. All is available only after successful reads and a cross-host session overlap check.
 
-This is an early prototype tested on one Mac, Windows and WSL setup. Optional adapters now read current Codex limits, saved reasoning and speed settings, tool-call categories and local benchmark receipts. It does not capture every terminal command, iPhone activity, Gemini website usage or other providers' live limits. The Antigravity adapter currently reads four named receipt files from one configured directory. [Source coverage](docs/SOURCE-COVERAGE.md) explains what each measurement can establish.
+This is an early prototype tested on one Mac, Windows and WSL setup. Optional adapters now read current Codex limits, saved reasoning and speed settings, tool-call categories and local benchmark receipts. It does not capture every terminal command, iPhone activity, Gemini website usage or other providers' live limits. The Antigravity adapter currently dynamically reads all receipt files (including parallel subagent workers) from one configured directory. [Source coverage](docs/SOURCE-COVERAGE.md) explains what each measurement can establish.
 
 ## Try the demo
 

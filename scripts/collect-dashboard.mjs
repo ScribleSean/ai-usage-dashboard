@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { readFile, writeFile, rename, mkdir, stat } from 'node:fs/promises';
+import { readFile, writeFile, rename, mkdir, stat, readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { cleanIntervals, summarizeTracked, appLabel } from './activity-timeline.mjs';
@@ -264,14 +264,20 @@ export async function collect() {
     else inventories[host] = {status:'incomplete'};
     return result.settings;
   }):Promise.resolve({host,status:'not-connected'})));
-  for (const name of ['run', 'followup', 'safety', 'runtime']) {
-    const f = path.join(config.receiptDirectory, name + '.usage.json');
-    try {
-      rows.push({
-        value: JSON.parse(await readFile(f, 'utf8')),
-        modified: (await stat(f)).mtimeMs,
-      });
-    } catch {}
+  try {
+    const files = await readdir(config.receiptDirectory);
+    for (const file of files) {
+      if (!file.endsWith('.usage.json')) continue;
+      const f = path.join(config.receiptDirectory, file);
+      try {
+        rows.push({
+          value: JSON.parse(await readFile(f, 'utf8')),
+          modified: (await stat(f)).mtimeMs,
+        });
+      } catch {}
+    }
+  } catch (err) {
+    // Cannot read directory, rows remains empty
   }
   const readable = [mac, windows].filter(x => x.status === 'ok' && x.intervals);
   const combined = readable.length === 2 ? (() => {
