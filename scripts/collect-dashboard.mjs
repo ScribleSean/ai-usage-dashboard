@@ -7,6 +7,9 @@ import { cleanIntervals, summarize, appLabel } from './activity-timeline.mjs';
 import { estimate } from './api-estimate.mjs';
 import { readQuota } from './read-quota.mjs';
 import { pythonReport } from './python-report.mjs';
+import { readSettingsSnapshot } from './settings-snapshot.mjs';
+import { combineTokens, combineSettings } from './combine-tokens.mjs';
+import { randomBytes } from 'node:crypto';
 const exec = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const fields = [
@@ -197,6 +200,14 @@ export async function collect() {
     path.join(root, 'scripts/windows-aggregate-activity.ps1'),
     'utf8',
   );
+  const readTokens = host => guarded(host, async () => {
+    if (host === 'Mac') return cleanTokens(await command(config.macCcusage,
+      ['codex','daily','--offline','--no-cost','--timezone','America/New_York','--json']),host);
+    if (host === 'Windows' && !config.windowsCodexHome) return {host,status:'not-connected'};
+    const prefix = host === 'Windows' ? 'env CODEX_HOME=' + config.windowsCodexHome + ' ' : '';
+    return cleanTokens(await command('ssh',['-oBatchMode=yes','-oConnectTimeout=8',config.ubuntuHost,
+      prefix + config.ubuntuCcusage + ' codex daily --offline --no-cost --timezone America/New_York --json']),host);
+  });
   const [mac, windows, macTokens, wslTokens, windowsTokens, quota, localModel] = await Promise.all([
     guarded('Mac', macActivity),
     guarded('Windows', async () =>
@@ -211,37 +222,9 @@ export async function collect() {
         'Windows',
       ),
     ),
-    guarded('Mac', async () =>
-      cleanTokens(
-        await command(config.macCcusage, [
-          'codex',
-          'daily',
-          '--offline',
-          '--no-cost',
-          '--timezone',
-          'America/New_York',
-          '--json',
-        ]),
-        'Mac',
-      ),
-    ),
-    guarded('Ubuntu', async () =>
-      cleanTokens(
-        await command('ssh', [
-          '-oBatchMode=yes',
-          '-oConnectTimeout=8',
-          config.ubuntuHost,
-          config.ubuntuCcusage +
-            ' codex daily --offline --no-cost --timezone America/New_York --json',
-        ]),
-        'Ubuntu',
-      ),
-    ),
-    config.windowsCodexHome ? guarded('Windows', async () => cleanTokens(
-      await command('ssh', ['-oBatchMode=yes', '-oConnectTimeout=8', config.ubuntuHost,
-        'env CODEX_HOME=' + config.windowsCodexHome + ' ' + config.ubuntuCcusage +
-        ' codex daily --offline --no-cost --timezone America/New_York --json']), 'Windows'
-    )) : Promise.resolve({ host: 'Windows', status: 'not-connected' }),
+    readTokens('Mac'),
+    readTokens('Ubuntu'),
+    readTokens('Windows'),
     config.codexExecutable ? guarded('Codex', () => readQuota(config.codexExecutable)) : Promise.resolve({status:'not-connected'}),
     config.localModelResults ? guarded('Ubuntu', async () => {
       const raw=await pythonReport(config.ubuntuHost, await readFile(path.join(root,'scripts/read-local-model.py'),'utf8'),config.localModelResults);
@@ -254,10 +237,23 @@ export async function collect() {
     }) : Promise.resolve({host:'Ubuntu',status:'not-connected'}),
   ]);
   const rows = [];
-  const settingsScript = await readFile(path.join(root,'scripts/read-settings.py'),'utf8');
+  // Comparison keys change every collection and never enter the saved report.
+  const settingsScript = `INVENTORY_SALT = '${randomBytes(32).toString('hex')}'\n` + await readFile(path.join(root,'scripts/read-settings.py'),'utf8');
+  const inventories = {};
+  const tokenSources = [macTokens, wslTokens, windowsTokens];
   const settings = await Promise.all([
     ['Mac',null,config.macCodexHome], ['Ubuntu',config.ubuntuHost,config.ubuntuCodexHome], ['Windows',config.ubuntuHost,config.windowsCodexHome]
-  ].map(([host,ssh,folder])=>folder?guarded(host,async()=>cleanSettings(await pythonReport(ssh,settingsScript,folder),host)):Promise.resolve({host,status:'not-connected'})));
+  ].map(([host,ssh,folder],index)=>folder?guarded(host,async()=>{
+    const result = await readSettingsSnapshot(tokenSources[index], () => readTokens(host),
+      async () => {
+        const raw = await pythonReport(ssh,settingsScript,folder);
+        inventories[host] = raw.inventory;
+        return cleanSettings(raw,host);
+      });
+    if (result.tokens.status === 'ok') tokenSources[index] = result.tokens;
+    else inventories[host] = {status:'incomplete'};
+    return result.settings;
+  }):Promise.resolve({host,status:'not-connected'})));
   for (const name of ['run', 'followup', 'safety', 'runtime']) {
     const f = path.join(config.receiptDirectory, name + '.usage.json');
     try {
@@ -274,13 +270,16 @@ export async function collect() {
     const intervals = readable.flatMap(x => x.intervals).map(r => ({ ...r, start: Math.max(r.start, Date.parse(start)), end: Math.min(r.end, Date.parse(end)) })).filter(r => r.end > r.start);
     return { host: 'Combined', status: 'ok', start, end, ...summarize(intervals, start, end) };
   })() : { host: 'Combined', status: 'unavailable' };
+  const combinedTokens = combineTokens(tokenSources,inventories);
   const data = {
     schema: 2,
     collectedAt: new Date().toISOString(),
     timezone: 'America/New_York',
     activity: [mac, windows].map(({ intervals, ...safe }) => safe),
     combined,
-    tokens: [macTokens, wslTokens, windowsTokens],
+    tokens: tokenSources,
+    combinedTokens,
+    combinedSettings: combinedTokens.status === 'ok' ? combineSettings(tokenSources,settings) : {host:'All',status:'unavailable'},
     agents: cleanReceipts(rows),
     quota,
     localModel,

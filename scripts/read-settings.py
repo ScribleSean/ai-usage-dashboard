@@ -1,5 +1,7 @@
 """Summarize saved Codex settings and tool-call categories without exporting text."""
 import datetime as dt
+import hashlib
+import hmac
 import json
 import math
 import pathlib
@@ -8,6 +10,7 @@ from zoneinfo import ZoneInfo
 
 FIELDS = ['input_tokens', 'cached_input_tokens', 'cache_write_input_tokens', 'output_tokens', 'reasoning_output_tokens', 'total_tokens']
 EFFORTS = {'none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'}
+TIERS = {'default':'standard', 'standard':'standard', 'priority':'fast', 'fast':'fast'}
 
 def number(x):
     return x if type(x) in (int, float) and math.isfinite(x) and x >= 0 else None
@@ -15,8 +18,23 @@ def number(x):
 def label(x):
     return x if isinstance(x, str) and 0 < len(x) <= 100 and all(c.isalnum() or c in '-_./:' for c in x) else 'unknown'
 
+def inventory_metadata(meta, salt):
+    """Ephemeral comparison keys only. The collector never saves these keys."""
+    payload = meta.get('payload', {}) if meta.get('type') == 'session_meta' else {}
+    if not isinstance(payload, dict):
+        return None
+    def keys(values):
+        return [hmac.new(salt.encode(), value.encode(), hashlib.sha256).hexdigest()
+                for value in values if isinstance(value, str) and 0 < len(value) <= 128]
+    owned = keys([payload.get('id'), payload.get('session_id')])
+    parents = keys([payload.get('forked_from_id'), payload.get('parent_thread_id')])
+    return dict(keys=owned, parents=parents) if owned else None
+
 def summarize(events, cutoff):
     model, effort, speed = 'unknown', 'unknown', 'unknown'
+    context_model = None
+    selected_model = 'unknown'
+    selected_speed = 'unknown'
     prior = None
     profiles, tools = {}, {}
     seen_calls = set()
@@ -26,17 +44,35 @@ def summarize(events, cutoff):
             continue
         if p.get('type') == 'thread_settings_applied':
             s = p.get('thread_settings') or {}
-            model = label(s.get('model'))
-            effort = s.get('reasoning_effort') if s.get('reasoning_effort') in EFFORTS else 'unknown'
-            speed = {'default':'standard', 'priority':'fast', 'fast':'fast'}.get(s.get('service_tier'), 'unknown')
+            if not isinstance(s, dict):
+                continue
+            next_selected = label(s['model']) if 'model' in s else selected_model
+            if next_selected != selected_model:
+                selected_speed = 'unknown'
+            selected_model = next_selected
+            if 'service_tier' in s:
+                selected_speed = TIERS.get(s['service_tier'], 'unknown')
+            # A newly selected model does not relabel the preceding turn.
+            if context_model is None:
+                model = selected_model
+            if selected_model == model:
+                if 'reasoning_effort' in s:
+                    effort = s['reasoning_effort'] if s['reasoning_effort'] in EFFORTS else 'unknown'
+                if 'service_tier' in s:
+                    speed = TIERS.get(s['service_tier'], 'unknown')
+            else:
+                speed = 'unknown'
         if event.get('type') == 'turn_context':
             next_model = label(p.get('model'))
             if next_model != model:
                 speed = 'unknown'
             model = next_model
+            context_model = model
+            if model == selected_model:
+                speed = selected_speed
             effort = p.get('effort') if p.get('effort') in EFFORTS else 'unknown'
             if 'service_tier' in p:
-                speed = {'default':'standard', 'priority':'fast', 'fast':'fast'}.get(p['service_tier'], 'unknown')
+                speed = TIERS.get(p['service_tier'], 'unknown')
         try:
             stamp = dt.datetime.fromisoformat(event['timestamp'].replace('Z', '+00:00'))
             date = stamp.astimezone(ZoneInfo('America/New_York')).date().isoformat()
@@ -59,8 +95,18 @@ def summarize(events, cutoff):
         current = {k:number(raw.get(k, 0 if k == 'cache_write_input_tokens' else None)) for k in FIELDS}
         if any(v is None for v in current.values()):
             continue
+        repeated = current == prior
         delta = {k:current[k]-(prior[k] if prior else 0) for k in FIELDS}
         prior = current
+        if repeated:
+            continue
+        # Match the daily reader: use the recorded request counters when the
+        # cumulative counter advances. Deltas alone can lose usage after resets.
+        last = (p.get('info') or {}).get('last_token_usage')
+        if isinstance(last, dict):
+            delta = {k:number(last.get(k, 0 if k == 'cache_write_input_tokens' else None)) for k in FIELDS}
+            if any(v is None for v in delta.values()):
+                continue
         if stamp < cutoff or any(v < 0 for v in delta.values()) or delta['total_tokens'] == 0:
             continue
         # Codex input includes cache reads and writes. Output includes reasoning.
@@ -82,19 +128,30 @@ def collect(folder):
     if len(candidates) > 20000:
         raise ValueError('Too many files')
     sessions = {}
+    inventory = dict(status='ok', keys=set(), parents=set())
+    salt = globals().get('INVENTORY_SALT')
     for file in candidates:
         if file.is_symlink() or not file.resolve().is_relative_to(root):
+            inventory['status'] = 'incomplete'
             continue
         info = file.stat()
-        if info.st_mtime < cutoff.timestamp():
-            continue
         with file.open() as stream:
             first = stream.readline(1_000_000)
         try:
             meta = json.loads(first)
             identity = meta.get('payload',{}).get('id') if meta.get('type') == 'session_meta' else None
         except ValueError:
+            meta = {}
             identity = None
+        if salt:
+            metadata = inventory_metadata(meta, salt)
+            if metadata:
+                inventory['keys'].update(metadata['keys'])
+                inventory['parents'].update(metadata['parents'])
+            else:
+                inventory['status'] = 'incomplete'
+        if info.st_mtime < cutoff.timestamp():
+            continue
         identity = identity or str(file)
         if identity not in sessions or info.st_size > sessions[identity][1]:
             sessions[identity] = (file,info.st_size)
@@ -124,7 +181,10 @@ def collect(folder):
         for row in calls:
             key=(row['date'],row['category'])
             tools[key]=tools.get(key,0)+row['count']
-    return dict(status='ok',profiles=list(profiles.values()),tools=[dict(date=d,category=c,count=n) for (d,c),n in sorted(tools.items())],scope='Recent saved Codex logs only')
+    result = dict(status='ok',profiles=list(profiles.values()),tools=[dict(date=d,category=c,count=n) for (d,c),n in sorted(tools.items())],scope='Recent saved Codex logs only')
+    if salt:
+        result['inventory'] = {k:sorted(v) if isinstance(v,set) else v for k,v in inventory.items()}
+    return result
 
 if __name__ == '__main__':
     print(json.dumps(collect(sys.argv[1]),allow_nan=False))

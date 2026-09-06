@@ -17,9 +17,23 @@ Recognized app names map to a fixed public list before transfer. Unknown applica
 
 ## Reasoning, speed and price
 
-The settings reader inspects recent session and archive logs on their owning machine. It keeps only model IDs, recorded effort, service tier, token counter increments and tool-call categories. It never exports prompts, command arguments, working directories or session IDs. Duplicate session files select the largest saved copy. Repeated cumulative usage is not added twice. Counter resets and inconsistent counters can reduce coverage.
+The settings reader inspects recent session and archive logs on their owning machine. It keeps only model IDs, recorded effort, service tier, token counts and tool-call categories. It never exports prompts, command arguments, working directories or raw session IDs. Duplicate session files select the largest saved copy. It uses the latest request counters when cumulative usage changes, with cumulative deltas as a fallback. Unchanged cumulative counters are not counted twice. A model selection does not relabel an earlier turn. Both `standard` and `default` are recognized as Standard speed.
+
+The collector brackets each settings read with daily token reports. If those totals change, it retries once. Continued changes withhold settings detail while preserving tool metadata. This prevents active usage from creating a false accounting mismatch. The request-counter rule was checked against the installed daily reader using local aggregate comparisons and synthetic reset fixtures. The upstream [Codex parser](https://github.com/ccusage/ccusage/blob/main/rust/adapters/codex/src/parser.rs) documents the same preference for request counters over cumulative differences.
 
 Before showing a settings breakdown, every token-category subtotal must fit the corresponding daily model report. A mismatch withholds that breakdown. Missing labels stay Unknown, and inferred model aliases are not used for price estimates.
+
+## All-host tokens
+
+All combines Mac, Ubuntu and native Windows daily Codex reports. It includes a by-host contribution breakdown, combined model rows and the same standard API comparison. Saved external-agent review receipts and local benchmark measurements are not added to these totals.
+
+Before aggregation, every host must return a successful token report and complete session-metadata inventory. Each collection generates a fresh random salt. Source machines turn session and parent identifiers into HMAC comparison keys. These temporary keys exist only during collection and are discarded before the snapshot is written. Only the verification result and overlap counts are saved.
+
+Shared identifiers, cross-host parent relationships or a shared parent block the combined total. Unavailable sources and incomplete inventories also block it. The dashboard does not guess which duplicate to keep. This checks cross-host overlap, not the completeness or correctness of every underlying provider record. Per-host settings must reconcile before they contribute to combined settings.
+
+## Weekly activity timeline
+
+Week shows seven dated rows and 24 hour cells per row. Color intensity represents recorded active minutes in that hour, while the row end shows the day's total. Selecting a row opens its day view. Empty cells can mean idle time or missing history, not proof of inactivity. Days outside the collected window are marked separately. Repeated daylight-saving hours share a cell, while the recorded duration remains unchanged.
 
 Model rows show a standard short-context API comparison and its share of the priced subtotal, not a share of the subscription bill. Expanded settings rows can apply the published Fast-mode rates where the tier was recorded. Reasoning tokens remain part of output. Long-context pricing, tools, regional adjustments and unreported cache writes are excluded. Rates were checked against [OpenAI pricing](https://developers.openai.com/api/docs/pricing) on September 6, 2026.
 

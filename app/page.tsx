@@ -64,7 +64,9 @@ type Agent = {
 type Report = {
   quota?: {status:string;checkedAt?:string;windows?:{bucket:string;window:string;remainingPercent:number;durationMinutes:number|null;resetsAt:string|null}[]};
   localModel?: {status:string;records?:{model:string;status:string;recordedAt:string|null;seconds:number|null;input:number|null;cached:number|null;output:number|null;ttft:number|null;peakGpuMiB:number|null}[]};
-  settings?: {host:string;status:string;profiles?:{date:string;model:string;effort:string;speed:string;totalTokens:number;inputTokens:number;cacheReadTokens:number;cacheCreationTokens:number;outputTokens:number}[];tools?:{date:string;category:string;count:number}[]}[];
+  settings?: {host:string;status:string;snapshotStable?:boolean;profiles?:{date:string;model:string;effort:string;speed:string;totalTokens:number;inputTokens:number;cacheReadTokens:number;cacheCreationTokens:number;outputTokens:number}[];tools?:{date:string;category:string;count:number}[]}[];
+  combinedTokens?: {host:string;status:string;days?:Tokens[];verification?:{status:string}};
+  combinedSettings?: NonNullable<Report['settings']>[number];
   combined?: ActivityRow;
   demo?: boolean;
   collectedAt: string;
@@ -143,7 +145,7 @@ export default function Home() {
     [host, setHost] = useState('Combined'),
     [selectedDate, setSelectedDate] = useState(''),
     [period, setPeriod] = useState('day'),
-    [tokenHost, setTokenHost] = useState('Mac'),
+    [tokenHost, setTokenHost] = useState('All'),
     [tokenDate, setTokenDate] = useState(''),
     [mobile, setMobile] = useState(false);
   const load = useCallback(async () => {
@@ -198,7 +200,8 @@ export default function Home() {
   const nextDate = activeDate ? shiftDate(activeDate,period === 'week' ? 7 : 1) : '';
   const seconds = sum(shownCategories),
     clock = time(seconds);
-  const tokenSource = data?.tokens.find((t) => t.host === tokenHost),
+  const tokenSources = data ? [data.combinedTokens || {host:'All',status:'unverified'},...data.tokens] : [];
+  const tokenSource = tokenSources.find((t) => t.host === tokenHost),
     days = tokenSource?.days?.slice(-7) || [],
     latest = days.find(d => d.date === tokenDate) || days.at(-1);
   const sourceRows = data ? [
@@ -209,7 +212,7 @@ export default function Home() {
   ] : [];
   const sourceCount=sourceRows.filter(x=>x.status==='ok').length;
   const sourceTotal=sourceRows.length;
-  const settingsSource=data?.settings?.find(s=>s.host===tokenHost);
+  const settingsSource=tokenHost==='All'?data?.combinedSettings:data?.settings?.find(s=>s.host===tokenHost);
   const localRecords=data?.localModel?.records || [];
   const providerWindows=data?.quota?.windows || [];
   return (
@@ -345,11 +348,18 @@ export default function Home() {
                   </TabsList>
                 <TabsContent value={host}>
                 {period === 'week' && <section className="weekly-timeline" aria-label="Recorded activity over seven days">
-                  {weekDays.map(({date,record}) => <Button key={date} variant="ghost" className="week-day" aria-label={`${date}: ${record ? Math.round(record.seconds / 60) + ' recorded minutes' : 'outside collected window'}. Open day.`} disabled={!record} onClick={() => {setSelectedDate(date);setPeriod('day');}}>
-                    <span className="week-bar-space"><span className="week-bar" style={{height:record?.seconds ? `${Math.max(4, record.seconds / Math.max(1,...weekDays.map(d => d.record?.seconds || 0)) * 100)}%` : '3px'}}/></span>
-                    <strong>{new Date(date+'T12:00:00Z').toLocaleDateString('en-US',{weekday:'short',timeZone:'UTC'})}</strong>
-                    <small>{record ? `${(record.seconds/3600).toFixed(1)}h` : 'Unknown'}</small>
+                  <div className="week-timeline-heading"><h2>Your week, hour by hour</h2><span>New York time</span></div>
+                  <div className="week-time-axis" aria-hidden="true"><div><span>12 AM</span><span>6 AM</span><span>Noon</span><span>6 PM</span><span>12 AM</span></div></div>
+                  {weekDays.map(({date,record}) => <Button key={date} variant="ghost" className="week-day" aria-label={`${date}: ${record ? Math.round(record.seconds / 60) + ' recorded minutes' : 'outside collected window'}. Open day.`} disabled={!record} onClick={() => {setSelectedDate(date);setPeriod('day');window.scrollTo(0,0);}}>
+                    <span className="week-date"><strong>{new Date(date+'T12:00:00Z').toLocaleDateString('en-US',{weekday:'short',timeZone:'UTC'})}</strong><small>{dateLabel(date)}</small></span>
+                    <span className="week-hours" aria-hidden="true">{Array.from({length:24},(_,hour)=>{
+                      const n=record?.hours[hour] || 0;
+                      return <span key={hour} className={!record?'outside-window':n?'has-activity':''} title={`${date}, ${hour}:00: ${record?Math.round(n/60)+' recorded minutes':'outside collected window'}`}><i style={{opacity:n?0.25+0.75*Math.min(1,n/3600):0}}/></span>;
+                    })}</span>
+                    <span className="week-total">{record ? `${(record.seconds/3600).toFixed(1)}h` : 'Unknown'}</span>
                   </Button>)}
+                  <div className="week-legend"><span>Each cell is one hour. Select a day for detail.</span><span>Less <i style={{opacity:0.3}}/><i style={{opacity:0.65}}/><i/> More</span></div>
+                  <p>Stronger color means more recorded active minutes. Empty cells can mean idle time or missing history. Coverage may be partial.</p>
                 </section>}
                 {period === 'day' && dailyActivity && <section className="daily-timeline" aria-label="Recorded activity by hour">
                   <div className="hour-track">{dailyActivity.hours.map((n, hour) => <span key={hour}
@@ -493,9 +503,9 @@ export default function Home() {
                     className="connected-buttons"
                     aria-label="Token source"
                   >
-                    {data.tokens.map((t) => (
+                    {tokenSources.map((t) => (
                       <TabsTrigger key={t.host} value={t.host}>
-                        {t.host === 'Mac' ? (
+                        {t.host === 'All' ? <Layers3 size={18}/> : t.host === 'Mac' ? (
                           <Laptop size={18} />
                         ) : (
                           <Terminal size={18} />
@@ -517,6 +527,7 @@ export default function Home() {
                           : compact(latest.totalTokens)}
                       </div>
                       <p>Total recorded tokens</p>
+                      {tokenHost==='All' && <p className="small-note">Mac + Ubuntu + Windows</p>}
                       <div className="token-parts">
                         <div>
                           <span>Input</span>
@@ -539,6 +550,19 @@ export default function Home() {
                         <p>Hypothetical standard, short-context token price, not your bill. Covers {fmt(latest?.apiEstimate?.coveredTokens)} tokens. Inferred models and unsupported rates are excluded.</p>
                         <p>Long-context rates, Fast mode, tool fees and unreported cache writes are not estimated. Rates checked {latest?.apiEstimate?.checked || 'not yet'} against <a href="https://developers.openai.com/api/docs/pricing" target="_blank" rel="noreferrer">OpenAI pricing</a>.</p>
                       </details>
+                      {tokenHost==='All' && <section className="host-contributions" aria-label="Contribution by host">
+                        <h3>By host</h3>
+                        {data.tokens.map(source=>{
+                          const day=source.days?.find(d=>d.date===latest?.date);
+                          const amount=day?.totalTokens ?? 0;
+                          return <div className="host-contribution" key={source.host}>
+                            <span>{source.host}</span><strong>{compact(amount)}<small>{latest?.totalTokens ? `${(amount/latest.totalTokens*100).toFixed(1)}% of tokens`:'No recorded tokens'}</small></strong>
+                            <span>{day ? day.apiEstimate?.usd==null?'Price unknown':`$${day.apiEstimate.usd.toFixed(2)}`:'$0.00'}<small>API comparison</small></span>
+                            <i aria-hidden="true"><i style={{width:`${latest?.totalTokens?amount/latest.totalTokens*100:0}%`}}/></i>
+                          </div>;
+                        })}
+                        <p>No shared session IDs or cross-host parent links found in this collection. Agent-review receipts and local benchmarks are separate and are not added here.</p>
+                      </section>}
                     </section>
                     <section className="table-surface">
                       <div className="table-heading">
@@ -549,7 +573,7 @@ export default function Home() {
                         {[...(latest?.models || [])].sort((a,b) => (b.totalTokens || 0) - (a.totalTokens || 0)).map(m => {
                           const coverage=settingsCoverage(m,(settingsSource?.profiles||[]).filter(p=>p.date===latest?.date&&p.model===m.model));
                           return (
-                          <details className="model-detail" key={m.model}>
+                          <details className="model-detail" key={m.model+String(m.inferred)}>
                             <summary>
                               <span className="model-label">{m.model.replace(/^gpt-/,'GPT ').replace(/-(astra|terra|sol|luna)$/i, (_, name: string) => ' ' + name[0].toUpperCase() + name.slice(1))}{m.inferred && <small>Inferred label</small>}</span>
                               <span className="model-amount" title={`${fmt(m.totalTokens)} tokens`}>{m.totalTokens == null ? 'Unknown' : compact(m.totalTokens)}<small>{m.totalTokens != null && latest?.totalTokens ? `${(m.totalTokens / latest.totalTokens * 100).toFixed(1)}% of tokens` : 'Share unknown'}</small></span>
@@ -576,7 +600,7 @@ export default function Home() {
                                 })}
                                 {coverage.status==='partial' && <p>{fmt((m.totalTokens||0)-coverage.knownTokens)} tokens have no reconciled settings in this scan.</p>}
                                 <p>Recorded settings, not measured reasoning time. Fast uses the published 2× short-context rates. Unknown tiers are not priced.</p>
-                              </>:<p>{coverage.status==='unreconciled'?'Settings counters do not yet match this daily report. Breakdown withheld instead of forcing the numbers.':'No matching recorded settings for this model and date.'}</p>}
+                              </>:<p>{settingsSource?.snapshotStable===false?'Usage changed during collection. Settings detail will return after a stable collection.':coverage.status==='unreconciled'?'Settings counters do not yet match this daily report. Breakdown withheld instead of forcing the numbers.':'No matching recorded settings for this model and date.'}</p>}
                             </section>
                           </details>
                         );})}
@@ -611,7 +635,7 @@ export default function Home() {
                   <State>
                     {tokenSource?.status === 'ok'
                       ? 'No recorded days found for this source.'
-                      : tokenSource?.status === 'not-connected' ? 'Native Windows token logs are not connected yet. Ubuntu covers WSL only, not the Windows app.' : 'This token source is unavailable.'}
+                      : tokenHost==='All' ? tokenSource?.status==='overlap'?'These hosts contain shared or related session records. The All total is withheld to avoid double-counting. Individual host views remain available.':'An All total needs three successful token reads and a complete cross-host overlap check. Individual host views remain available.' : tokenSource?.status === 'not-connected' ? 'Native Windows token logs are not connected yet. Ubuntu covers WSL only, not the Windows app.' : 'This token source is unavailable.'}
                   </State>
                 )}
                 </TabsContent>
@@ -624,8 +648,7 @@ export default function Home() {
                       .map((m) => m.model + (m.inferred ? ' (inferred)' : ''))
                       .join(', ') || 'No model records'}
                     . Totals are reported by ccusage. Cached tokens can
-                    dominate. Records from different hosts are not added
-                    together until mirrored-session deduplication is verified.
+                    dominate. All combines these three Codex log sources only after a cross-host session and parent-link overlap check. If overlap is detected, the combined total is withheld. This does not prove the underlying provider logs capture every request.
                     These are the latest recorded dates, which may have gaps. API comparisons are hypothetical and partial, not actual spending or remaining quota.
                   </p>
                 </details>

@@ -20,3 +20,30 @@ test('unknown settings are not guessed and tool arguments never leave reader',()
   const [rows,tools]=JSON.parse(output);assert.equal(rows[0].effort,'unknown');assert.equal(rows[0].speed,'unknown');
   assert.equal(tools[0].count,1);assert.equal(tools[0].category,'Shell');assert.ok(!output.includes('SECRET'));assert.ok(!output.includes('private-id'));
 });
+
+test('last request usage survives a cumulative reset without counting repeated reports',()=>{
+  const first=usage(100),reset=usage(20);
+  reset.payload.info.last_token_usage=usage(50).payload.info.total_token_usage;
+  const [rows]=JSON.parse(execFileSync('python3',['-c',code],{input:JSON.stringify([settings('high','standard'),first,reset,reset])}));
+  assert.equal(rows[0].totalTokens,165);
+  assert.equal(rows[0].speed,'standard');
+});
+
+test('selected model changes do not relabel usage from the preceding turn',()=>{
+  const context=model=>({timestamp:'2026-09-06T12:00:00Z',type:'turn_context',payload:{model,effort:'high'}});
+  const selected=settings('ultra','priority');
+  const [rows]=JSON.parse(execFileSync('python3',['-c',code],{input:JSON.stringify([
+    context('gpt-5.6-sol'),usage(100),selected,usage(200),context('gpt-6-astra'),usage(300)
+  ])}));
+  assert.equal(rows.filter(r=>r.model==='gpt-5.6-sol').reduce((n,r)=>n+r.totalTokens,0),220);
+  const astra=rows.find(r=>r.model==='gpt-6-astra');
+  assert.equal(astra.totalTokens,110);assert.equal(astra.speed,'fast');assert.equal(astra.effort,'high');
+});
+
+test('inventory keys are salted and exclude raw session metadata',()=>{
+  const inventoryCode=code.slice(0,code.indexOf('print(json.dumps'))+`\npayload=json.load(sys.stdin)\na=m.inventory_metadata(payload,'salt-one'); b=m.inventory_metadata(payload,'salt-two')\nprint(json.dumps([a,b]))`;
+  const output=execFileSync('python3',['-c',inventoryCode],{input:JSON.stringify({type:'session_meta',payload:{id:'PRIVATE-ID',parent_thread_id:'PRIVATE-PARENT',cwd:'PRIVATE-PATH',base_instructions:'SECRET'}})}).toString();
+  const [a,b]=JSON.parse(output);
+  assert.match(a.keys[0],/^[a-f0-9]{64}$/);assert.notEqual(a.keys[0],b.keys[0]);assert.equal(a.parents.length,1);
+  assert.ok(!output.includes('PRIVATE'));assert.ok(!output.includes('SECRET'));
+});

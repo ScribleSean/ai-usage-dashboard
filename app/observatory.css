@@ -279,12 +279,43 @@ summary:focus-visible {
 .date-navigation { display: grid; grid-template-columns: 36px minmax(0,1fr) 36px; gap: 4px; width: 100%; align-items: center; }
 .date-navigation > span { text-align: center; font-size: 0.875rem; font-weight: 600; }
 .date-navigation button { padding: 0 !important; min-width: 0; width: 36px; height: 36px; border-radius: 50%; }
-.weekly-timeline { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 6px; margin: 18px 0 22px; }
-.week-day { display: flex !important; flex-direction: column; align-items: center; gap: 5px !important; height: auto !important; min-width: 0; padding: 8px 2px !important; border-radius: 12px; }
-.week-bar-space { height: 76px; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
-.week-bar { width: 65%; max-width: 30px; background: var(--m3-primary); border-radius: 6px; }
-.week-day strong { font-size: 0.875rem; }
-.week-day small { font-size: 0.75rem; color: var(--m3-secondary); }
+.weekly-timeline { margin: 20px 0 28px; padding: 20px; background: var(--m3-low); border-radius: 24px; --week-label: 72px; --week-total: 56px; }
+.week-timeline-heading { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; margin-bottom: 18px; }
+.week-timeline-heading h2 { font-size: 1rem; font-weight: 600; margin: 0; }
+.week-timeline-heading > span { font-size: 0.875rem; color: var(--m3-secondary); }
+.week-time-axis { padding: 0 calc(var(--week-total) + 12px) 7px calc(var(--week-label) + 12px); }
+.week-time-axis > div { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--m3-secondary); }
+.week-day { display: grid !important; grid-template-columns: var(--week-label) minmax(0,1fr) var(--week-total); align-items: center; gap: 12px !important; height: auto !important; width: 100%; min-width: 0; padding: 5px 0 !important; border-radius: 8px; }
+.week-date { display: flex; flex-direction: column; text-align: left; gap: 2px; }
+.week-date strong { font-size: 0.875rem; }
+.week-date small { font-size: 0.75rem; color: var(--m3-secondary); }
+.week-hours { display: grid; grid-template-columns: repeat(24,minmax(0,1fr)); gap: 3px; }
+.week-hours > span { height: 30px; min-width: 0; border-radius: 4px; background: var(--m3-high); overflow: hidden; }
+.week-hours i { display: block; width: 100%; height: 100%; background: var(--m3-primary); }
+.week-hours .outside-window { background: repeating-linear-gradient(135deg,transparent 0 3px,var(--m3-high) 3px 5px); }
+.week-total { text-align: right; font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+.week-legend { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 15px; font-size: 0.75rem; color: var(--m3-secondary); }
+.week-legend > span:last-child { display: flex; gap: 4px; align-items: center; }
+.week-legend i { width: 12px; height: 12px; border-radius: 3px; background: var(--m3-primary); }
+.weekly-timeline > p { margin: 8px 0 0; font-size: 0.875rem; color: var(--m3-secondary); }
+.host-contributions { margin-top: 24px; border-top: 1px solid var(--m3-outline); padding-top: 18px; }
+.host-contributions h3 { font-size: 1rem; margin: 0 0 12px; }
+.host-contribution { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px 10px; font-size: 0.875rem; margin: 15px 0; }
+.host-contribution > strong, .host-contribution > span:nth-child(3) { text-align: right; }
+.host-contribution small { display: block; font-size: 0.75rem; font-weight: 400; color: var(--m3-secondary); }
+.host-contribution > i { grid-column: 1 / -1; height: 4px; border-radius: 3px; background: var(--m3-high); overflow: hidden; }
+.host-contribution > i > i { display: block; height: 100%; background: var(--m3-primary); }
+.host-contributions > p { font-size: 0.875rem; color: var(--m3-secondary); }
+@media (max-width: 700px) {
+  .weekly-timeline { padding: 16px 10px; --week-label: 46px; --week-total: 40px; }
+  .week-day { gap: 6px !important; }
+  .week-hours { gap: 2px; }
+  .week-hours > span { height: 32px; border-radius: 2px; }
+  .week-time-axis { padding-left: 52px; padding-right: 46px; }
+  .week-time-axis span:nth-child(2), .week-time-axis span:nth-child(4) { display: none; }
+  .week-timeline-heading { flex-wrap: wrap; gap: 4px; }
+  .week-total { font-size: 0.75rem; }
+}
 .view-heading h1 {
   font-size: 2.65rem;
   letter-spacing: -0.055em;
