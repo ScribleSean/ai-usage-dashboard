@@ -382,6 +382,41 @@ summary:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 .model-breakdown { padding: 0 18px; min-width: 0; }
+.model-price { grid-column: 1 / -1; color: var(--m3-secondary); font-size: .875rem; }
+.model-price small { display: inline; margin-left: 10px; }
+.category-row { align-items: flex-start; }
+.category-name { min-width: 0; }
+.category-explanation { font-size: .875rem; line-height: 1.5; color: var(--m3-secondary); margin: 8px 0; }
+.app-breakdown { margin-top: 12px; font-size: .875rem; }
+.app-breakdown summary { cursor: pointer; color: var(--m3-secondary); }
+.app-breakdown small { display: block; line-height: 1.5; margin-top: 10px; color: var(--m3-secondary); }
+.app-breakdown-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 5px 10px; margin: 12px 0; }
+.app-breakdown-row > span:first-child { overflow-wrap: anywhere; }
+.app-breakdown-row > span:nth-child(2) { font-variant-numeric: tabular-nums; }
+.app-breakdown-row > i { grid-column: 1 / -1; height: 3px; background: var(--m3-high); border-radius: 3px; }
+.app-breakdown-row > i > i { display: block; height: 100%; background: var(--m3-primary); border-radius: inherit; }
+.settings-breakdown { padding-top: 14px; margin-top: 14px; border-top: 1px solid var(--m3-outline); }
+.settings-breakdown h3, .tool-host h3 { font-size: .9rem; font-weight: 600; }
+.settings-breakdown p, .receipt-panel p, .allowance-panel p { font-size: .875rem; color: var(--m3-secondary); line-height: 1.55; margin: 12px 0 0; }
+.settings-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; padding: 12px 0; text-transform: capitalize; font-size: .875rem; }
+.settings-row strong { text-align: right; font-variant-numeric: tabular-nums; }
+.settings-row > small { grid-column: 1 / -1; }
+.allowance-panel, .receipt-panel { background: var(--m3-surface); padding: 18px 22px; border-radius: 24px; margin: 18px 0; }
+.allowance-panel > summary, .receipt-panel > summary, .local-model-detail > summary { cursor: pointer; font-size: .95rem; font-weight: 600; }
+.allowance-panel > summary > span { margin-left: 12px; color: var(--m3-secondary); font-weight: 400; font-size: .875rem; }
+.allowance-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px; border-top: 1px solid var(--m3-outline); padding: 14px 0; margin-top: 14px; }
+.allowance-row > small { grid-column: 1 / -1; }
+.allowance-row small { display: block; color: var(--m3-secondary); font-size: .875rem; }
+.allowance-row > span { overflow-wrap: anywhere; }
+.receipt-panel h2 { font-size: 1.05rem; font-weight: 600; }
+.local-model-detail { margin-top: 16px; border-top: 1px solid var(--m3-outline); padding-top: 14px; }
+.local-model-detail summary { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; }
+.local-model-detail summary strong { overflow-wrap: anywhere; }
+.local-model-detail summary span { font-weight: 400; color: var(--m3-secondary); }
+.tool-host { border-top: 1px solid var(--m3-outline); margin-top: 15px; padding-top: 12px; }
+.tool-counts { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.tool-counts span { background: var(--m3-high); padding: 8px 12px; border-radius: 12px; font-size: .875rem; }
+.tool-counts strong { margin-left: 8px; }
 .model-detail { border-top: 1px solid var(--m3-outline); padding: 14px 0; }
 .model-detail summary { display: grid; grid-template-columns: minmax(0, 1fr) minmax(6rem, auto); gap: 14px; cursor: pointer; align-items: start; }
 .model-detail summary:focus-visible, .model-history summary:focus-visible { outline: 2px solid var(--m3-primary); outline-offset: 4px; }

@@ -1,5 +1,7 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
+import { settingsCoverage } from '../scripts/settings-coverage.mjs';
+import { estimate } from '../scripts/api-estimate.mjs';
 import {
   Activity,
   Layers3,
@@ -39,7 +41,7 @@ type Tokens = {
   inputTokens: number | null;
   cacheReadTokens: number | null;
   outputTokens: number | null;
-  models: { model: string; inferred: boolean; inputTokens?: number | null; cacheReadTokens?: number | null; cacheCreationTokens?: number | null; outputTokens?: number | null; totalTokens?: number | null; apiEstimate?: { usd: number | null } }[];
+  models: { model: string; inferred: boolean; inputTokens?: number | null; cacheReadTokens?: number | null; cacheCreationTokens?: number | null; outputTokens?: number | null; totalTokens?: number | null; apiEstimate?: { usd: number | null; parts?:Record<string,number>|null } }[];
 };
 type ActivityRow = {
   host: string;
@@ -48,7 +50,7 @@ type ActivityRow = {
   latestEvent?: string;
   start?: string;
   end?: string;
-  days?: { date: string; seconds: number; hours: number[]; categories: Record<string, number> }[];
+  days?: { date: string; seconds: number; hours: number[]; categories: Record<string, number>; apps?:Record<string,Record<string,number>> }[];
 };
 type Agent = {
   failure?: string | null;
@@ -60,6 +62,9 @@ type Agent = {
   recordedAt: string;
 };
 type Report = {
+  quota?: {status:string;checkedAt?:string;windows?:{bucket:string;window:string;remainingPercent:number;durationMinutes:number|null;resetsAt:string|null}[]};
+  localModel?: {status:string;records?:{model:string;status:string;recordedAt:string|null;seconds:number|null;input:number|null;cached:number|null;output:number|null;ttft:number|null;peakGpuMiB:number|null}[]};
+  settings?: {host:string;status:string;profiles?:{date:string;model:string;effort:string;speed:string;totalTokens:number;inputTokens:number;cacheReadTokens:number;cacheCreationTokens:number;outputTokens:number}[];tools?:{date:string;category:string;count:number}[]}[];
   combined?: ActivityRow;
   demo?: boolean;
   collectedAt: string;
@@ -181,6 +186,11 @@ export default function Home() {
     return {date, record:current?.days?.find(d => d.date === date)};
   }) : [];
   const weeklyCategories: Record<string, number> = {};
+  const shownApps: Record<string,Record<string,number>> = {};
+  (period === 'week' ? weekDays.map(d=>d.record) : [dailyActivity]).forEach(record=>Object.entries(record?.apps||{}).forEach(([category,apps])=>{
+    shownApps[category] ||= {};
+    Object.entries(apps).forEach(([app,n])=>{shownApps[category][app]=(shownApps[category][app]||0)+n;});
+  }));
   weekDays.forEach(({record}) => Object.entries(record?.categories || {}).forEach(([k,v]) => {weeklyCategories[k] = (weeklyCategories[k] || 0) + v;}));
   const shownCategories = period === 'week' && current?.days ? weeklyCategories : dailyActivity?.categories || (current?.days ? undefined : current?.categories);
   const earliest = current?.days?.[0]?.date, newest = current?.days?.at(-1)?.date;
@@ -191,10 +201,17 @@ export default function Home() {
   const tokenSource = data?.tokens.find((t) => t.host === tokenHost),
     days = tokenSource?.days?.slice(-7) || [],
     latest = days.find(d => d.date === tokenDate) || days.at(-1);
-  const sourceCount = data
-    ? [...data.activity, ...data.tokens].filter((x) => x.status === 'ok').length
-    : 0;
-  const sourceTotal = data ? data.activity.length + data.tokens.length : 0;
+  const sourceRows = data ? [
+    ...data.activity.map(a=>({...a,kind:'ActivityWatch'})), ...data.tokens.map(t=>({...t,kind:'Codex logs'})),
+    ...(data.quota?[{host:'Codex account',kind:'Limits snapshot',status:data.quota.status}]:[]),
+    ...(data.localModel?[{host:'Ubuntu',kind:'Local model receipts',status:data.localModel.status}]:[]),
+    ...(data.settings||[]).map(s=>({host:s.host,kind:'Settings & tool metadata',status:s.status}))
+  ] : [];
+  const sourceCount=sourceRows.filter(x=>x.status==='ok').length;
+  const sourceTotal=sourceRows.length;
+  const settingsSource=data?.settings?.find(s=>s.host===tokenHost);
+  const localRecords=data?.localModel?.records || [];
+  const providerWindows=data?.quota?.windows || [];
   return (
     <div className="app-shell">
       <header className="app-bar">
@@ -235,6 +252,7 @@ export default function Home() {
           if (typeof v === 'string') {
             setView(v);
             history.replaceState(null, '', '#' + v);
+            window.scrollTo(0, 0);
           }
         }}
         orientation={mobile ? 'horizontal' : 'vertical'}
@@ -378,6 +396,7 @@ export default function Home() {
                       aria-label="Time by app category"
                     >
                       {Object.entries(shownCategories)
+                        .filter(([,v])=>v>0)
                         .sort((a, b) => b[1] - a[1])
                         .map(([k, v]) => {
                           const Icon = icons[k] || Shapes;
@@ -389,18 +408,21 @@ export default function Home() {
                                 <Icon size={21} />
                               </span>
                               <div className="category-name">
-                                <strong>{k}</strong>
+                                <strong>{k === 'Mixed activity' ? 'Device overlap' : k}</strong>
                                 <span>
-                                  {seconds
-                                    ? Math.round((v / seconds) * 100)
-                                    : 0}
+                                  {seconds && v / seconds * 100 < 1 ? '<1' : seconds ? Math.round(v / seconds * 100) : 0}
                                   % of recorded activity
                                 </span>
+                                {k === 'AI apps' && <p className="category-explanation">Active foreground app time, not model execution time.</p>}
+                                {k === 'Mixed activity' && <p className="category-explanation">Different categories were active at once. Counted once, without guessing your attention.</p>}
+                                {shownApps[k] && k !== 'Mixed activity' && <details className="app-breakdown" open={k === 'AI apps'}>
+                                  <summary>By app</summary>
+                                  {Object.entries(shownApps[k]).sort((a,b)=>b[1]-a[1]).map(([app,n])=><div key={app} className="app-breakdown-row"><span>{app}</span><span>{n<60?'<1m':`${time(n).hours?time(n).hours+'h ':''}${time(n).minutes}m`}</span><i aria-hidden="true"><i style={{width:`${Math.min(100,n/v*100)}%`}}/></i></div>)}
+                                  {Object.keys(shownApps[k]).includes('ChatGPT / Codex') && <small>The desktop app shares one process label, so these modes cannot be separated from foreground records.</small>}
+                                </details>}
                               </div>
                               <span className="category-value">
-                                {time(v).hours}
-                                <small>h</small> {time(v).minutes}
-                                <small>m</small>
+                                {v < 60 ? '<1m' : <>{time(v).hours}<small>h</small> {time(v).minutes}<small>m</small></>}
                               </span>
                             </div>
                           );
@@ -421,7 +443,7 @@ export default function Home() {
                     <span>Collector snapshot</span>
                   </div>
                   <p>
-                    App categories only. Window titles stay on their devices.
+                    Recognized app labels only. Window titles stay on their devices.
                   </p>
                 </div>
                 <details className="method-note">
@@ -451,6 +473,15 @@ export default function Home() {
                   </div>
                   <span className="period-chip">America/New_York</span>
                 </div>
+                {data.quota && <details className="allowance-panel">
+                  <summary>Codex limits <span>{data.quota.status==='ok'?'Latest check':'Unavailable'}</span></summary>
+                  {providerWindows.map(w=><div className="allowance-row" key={w.bucket+w.window}>
+                    <span>{w.bucket.replaceAll('_',' ')}<small>{w.durationMinutes==null?'Window unknown':w.durationMinutes>=1440?`${(w.durationMinutes/1440).toFixed(0)}-day window`:`${(w.durationMinutes/60).toFixed(1)}-hour window`}</small></span>
+                    <strong>{w.remainingPercent.toFixed(1)}% left</strong>
+                    <small>Resets {w.resetsAt?new Date(w.resetsAt).toLocaleString():'Unknown'}</small>
+                  </div>)}
+                  <p>Read from Codex at {data.quota.checkedAt?new Date(data.quota.checkedAt).toLocaleString():'Unknown'}. This is a snapshot, not a live countdown. Bucket IDs come from the service. No resets are redeemed.</p>
+                </details>}
                 <Tabs
                   value={tokenHost}
                   onValueChange={(v) =>
@@ -515,11 +546,14 @@ export default function Home() {
                         <span>{latest?.date}</span>
                       </div>
                       <div className="model-breakdown">
-                        {[...(latest?.models || [])].sort((a,b) => (b.totalTokens || 0) - (a.totalTokens || 0)).map(m => (
+                        {[...(latest?.models || [])].sort((a,b) => (b.totalTokens || 0) - (a.totalTokens || 0)).map(m => {
+                          const coverage=settingsCoverage(m,(settingsSource?.profiles||[]).filter(p=>p.date===latest?.date&&p.model===m.model));
+                          return (
                           <details className="model-detail" key={m.model}>
                             <summary>
                               <span className="model-label">{m.model.replace(/^gpt-/,'GPT ').replace(/-(astra|terra|sol|luna)$/i, (_, name: string) => ' ' + name[0].toUpperCase() + name.slice(1))}{m.inferred && <small>Inferred label</small>}</span>
                               <span className="model-amount" title={`${fmt(m.totalTokens)} tokens`}>{m.totalTokens == null ? 'Unknown' : compact(m.totalTokens)}<small>{m.totalTokens != null && latest?.totalTokens ? `${(m.totalTokens / latest.totalTokens * 100).toFixed(1)}% of tokens` : 'Share unknown'}</small></span>
+                              <span className="model-price">{m.apiEstimate?.usd == null ? 'API estimate unknown' : `$${m.apiEstimate.usd.toFixed(2)} standard API`}{m.apiEstimate?.usd != null && latest?.apiEstimate?.usd ? <small>{(m.apiEstimate.usd/latest.apiEstimate.usd*100).toFixed(1)}% of priced usage</small>:null}</span>
                               <span className="model-share" aria-hidden="true"><span style={{width: `${Math.min(100, Math.max(0, (m.totalTokens || 0) / (latest?.totalTokens || 1) * 100))}%`}} /></span>
                               <ChevronRight className="model-expand" size={16} aria-hidden="true" />
                             </summary>
@@ -531,8 +565,21 @@ export default function Home() {
                               <div><dt>Output</dt><dd>{fmt(m.outputTokens)}</dd></div>
                             </dl>
                             <p className="model-estimate">API comparison: {m.apiEstimate?.usd == null ? 'Unknown' : `$${m.apiEstimate.usd.toFixed(2)}`}<span>Not actual spend. Standard short-context scenario.</span></p>
+                            {m.apiEstimate?.parts && <dl className="model-counts">{Object.entries(m.apiEstimate.parts).map(([part,usd])=><div key={part}><dt>{({input:'Input',cached:'Cache reads',cacheWrites:'Cache writes',output:'Output'} as Record<string,string>)[part]} estimate</dt><dd>${usd.toFixed(2)}</dd></div>)}</dl>}
+                            <section className="settings-breakdown" aria-label="Recorded reasoning and speed">
+                              <h3>Reasoning & speed</h3>
+                              {coverage.rows.length ? <>
+                                {coverage.rows.map((p: NonNullable<NonNullable<Report['settings']>[number]['profiles']>[number])=>{
+                                  const standard=estimate([p]).usd;
+                                  const cost=standard==null || p.speed==='unknown'?null:standard*(p.speed==='fast'?2:1);
+                                  return <div className="settings-row" key={p.effort+p.speed}><span>{p.effort === 'unknown'?'Unknown effort':p.effort} · {p.speed === 'unknown'?'Unknown speed':p.speed}</span><strong>{compact(p.totalTokens)}<small>{m.totalTokens?`${(p.totalTokens/m.totalTokens*100).toFixed(1)}% of model tokens`:''}</small></strong><small>{cost==null?'Price unknown':`$${cost.toFixed(2)} API scenario`}</small></div>;
+                                })}
+                                {coverage.status==='partial' && <p>{fmt((m.totalTokens||0)-coverage.knownTokens)} tokens have no reconciled settings in this scan.</p>}
+                                <p>Recorded settings, not measured reasoning time. Fast uses the published 2× short-context rates. Unknown tiers are not priced.</p>
+                              </>:<p>{coverage.status==='unreconciled'?'Settings counters do not yet match this daily report. Breakdown withheld instead of forcing the numbers.':'No matching recorded settings for this model and date.'}</p>}
+                            </section>
                           </details>
-                        ))}
+                        );})}
                         {!latest?.models.length && <p>No model breakdown in this report.</p>}
                       </div>
                       <details className="model-history">
@@ -653,6 +700,26 @@ export default function Home() {
                     serving model.
                   </p>
                 </details>
+                {data.localModel && <section className="receipt-panel">
+                  <h2>Local model runs</h2>
+                  <p>Saved benchmark measurements, separate from cloud tokens and your active time.</p>
+                  {data.localModel.status==='ok' ? [...new Set(localRecords.map(r=>r.model))].map(model=>{
+                    const rows=localRecords.filter(r=>r.model===model);
+                    const durations=rows.map(r=>r.seconds).filter((n):n is number=>n!=null);
+                    const output=rows.map(r=>r.output).filter((n):n is number=>n!=null);
+                    const peaks=rows.map(r=>r.peakGpuMiB).filter((n):n is number=>n!=null);
+                    return <details key={model} className="local-model-detail"><summary><strong>{model}</strong><span>{rows.length} recorded calls</span></summary>
+                      <dl className="model-counts"><div><dt>Completed calls</dt><dd>{rows.filter(r=>r.status==='complete').length}/{rows.length}</dd></div><div><dt>Reported output tokens</dt><dd>{output.length?fmt(output.reduce((a,b)=>a+b,0)):'Unknown'}{output.length!==rows.length?' (partial)':''}</dd></div><div><dt>Reply duration range</dt><dd>{durations.length?`${Math.min(...durations).toFixed(2)} to ${Math.max(...durations).toFixed(2)} s`:'Unknown'}</dd></div><div><dt>Peak total GPU memory</dt><dd>{peaks.length?`${(Math.max(...peaks)/1024).toFixed(2)} GiB`:'Unknown'}</dd></div></dl>
+                      <p>Includes recorded cold and warm calls. GPU memory is total device use, not model-only memory. This does not indicate a model is running now or assign an API price.</p>
+                    </details>;
+                  }):<p>Local receipts unavailable.</p>}
+                </section>}
+                {!!data.settings?.length && <details className="receipt-panel tool-panel"><summary>Recorded tool calls</summary><p>Recent saved Codex logs only. Counts are requests, not proof of successful execution or time worked. General SSH commands and unlogged tools are not captured. Hosts are not added together.</p>
+                  {data.settings.map(source=>{
+                    const counts:Record<string,number>={};source.tools?.forEach(t=>{counts[t.category]=(counts[t.category]||0)+t.count;});
+                    return <div key={source.host} className="tool-host"><h3>{source.host}</h3>{source.status==='ok'?<div className="tool-counts">{Object.entries(counts).map(([label,count])=><span key={label}>{label} <strong>{fmt(count)}</strong></span>)}{!Object.keys(counts).length&&<span>No saved calls in this scan.</span>}</div>:<p>Unavailable</p>}</div>;
+                  })}
+                </details>}
               </TabsContent>
               <TabsContent value="sources" className="view-panel">
                 <div className="view-heading">
@@ -663,13 +730,7 @@ export default function Home() {
                   <span className="period-chip">{sourceCount}/{sourceTotal} read</span>
                 </div>
                 <div className="source-grid">
-                  {[
-                    ...data.activity.map((a) => ({
-                      ...a,
-                      kind: 'ActivityWatch',
-                    })),
-                    ...data.tokens.map((t) => ({ ...t, kind: 'Codex logs' })),
-                  ].map((s) => (
+                  {sourceRows.map((s) => (
                     <div className="source-row" key={s.host + s.kind}>
                       <span className="source-icon">
                         <Database size={20} />
@@ -695,12 +756,12 @@ export default function Home() {
                   ))}
                 </div>
                 <section className="coverage-panel">
-                  <h2>Not connected yet</h2>
+                  <h2>Coverage still missing</h2>
                   <div className="coverage-tags">
                     {[
-                      'Live limits & resets',
-                      'SSH / tool history',
-                      'Local model receipts',
+                      ...(data.quota?.status==='ok'?['Other provider limits']:['Codex limits']),
+                      'Unlogged SSH commands',
+                      ...(data.localModel?.status==='ok'?[]:['Local model receipts']),
                       'iPhone activity',
                       'Gemini web usage',
                     ].map((x) => (
@@ -708,8 +769,7 @@ export default function Home() {
                     ))}
                   </div>
                   <p>
-                    Missing data stays unknown. No extra models or paid APIs run
-                    to refresh this view.
+                    Codex tool metadata is partial history, not a system-wide recorder. iPhone activity and Gemini website tokens need separate collection methods. No browser cookies, prompts or command arguments are collected.
                   </p>
                 </section>
                 <details className="method-note">

@@ -1,4 +1,10 @@
 export const categories = ['AI apps', 'Editors', 'Terminal', 'Browser', 'Other'];
+export const appLabels = ['Codex', 'ChatGPT / Codex', 'Antigravity', 'VS Code', 'Cursor', 'Chrome', 'Edge', 'Safari', 'Firefox', 'Terminal', 'Other app', 'Unknown app'];
+export function appLabel(raw) {
+  const app = String(raw).toLowerCase();
+  for (const [pattern, label] of [[/codex/,'Codex'],[/chatgpt/,'ChatGPT / Codex'],[/antigravity/,'Antigravity'],[/cursor/,'Cursor'],[/code\.exe|visual studio code/,'VS Code'],[/chrome/,'Chrome'],[/msedge|microsoft edge/,'Edge'],[/safari/,'Safari'],[/firefox/,'Firefox'],[/terminal|powershell|cmd\.exe|conhost|wezterm|ubuntu|iterm/,'Terminal']]) if (pattern.test(app)) return label;
+  return 'Other app';
+}
 export const timezone = 'America/New_York';
 const clock = new Intl.DateTimeFormat('en-CA', {
   timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23',
@@ -14,7 +20,7 @@ export function cleanIntervals(rows, start, end) {
   return rows.map(r => {
     const a = Date.parse(r.start), b = Date.parse(r.end);
     if (!Number.isFinite(a) || !Number.isFinite(b) || b < a || !categories.includes(r.category)) throw Error('Invalid interval');
-    return { start: Math.max(lo, a), end: Math.min(hi, b), category: r.category };
+    return { start: Math.max(lo, a), end: Math.min(hi, b), category: r.category, app: appLabels.includes(r.app) ? r.app : 'Unknown app' };
   }).filter(r => r.end > r.start);
 }
 
@@ -23,20 +29,22 @@ export function cleanIntervals(rows, start, end) {
 export function summarize(rows, start, end) {
   const days = new Map();
   const day = date => {
-    if (!days.has(date)) days.set(date, { date, seconds: 0, hours: Array(24).fill(0), categories: {} });
+    if (!days.has(date)) days.set(date, { date, seconds: 0, hours: Array(24).fill(0), categories: {}, apps: {} });
     return days.get(date);
   };
   for (let t = Date.parse(start); t < Date.parse(end); t += 3600000) day(slot(t).date);
   const events = [];
-  rows.forEach((r, id) => { events.push([r.start, id, r.category], [r.end, id, null]); });
+  rows.forEach((r, id) => { events.push([r.start, id, {category:r.category, app:r.app || 'Unknown app'}], [r.end, id, null]); });
   events.sort((a, b) => a[0] - b[0]);
   const active = new Map();
   let previous = events[0]?.[0];
   for (let i = 0; i < events.length;) {
     const t = events[i][0];
     if (active.size && t > previous) {
-      const labels = new Set(active.values());
+      const labels = new Set([...active.values()].map(v => v.category));
       const category = labels.size === 1 ? [...labels][0] : 'Mixed activity';
+      const apps = new Set([...active.values()].map(v => v.app));
+      const app = category === 'Mixed activity' ? 'Overlapping categories' : apps.size === 1 ? [...apps][0] : 'Multiple apps';
       // Split on minute boundaries to honor local midnight and DST transitions.
       for (let cursor = previous; cursor < t;) {
         const next = Math.min(t, (Math.floor(cursor / 60000) + 1) * 60000);
@@ -44,6 +52,8 @@ export function summarize(rows, start, end) {
         d.seconds += seconds;
         d.hours[s.hour] += seconds;
         d.categories[category] = (d.categories[category] || 0) + seconds;
+        d.apps[category] ||= {};
+        d.apps[category][app] = (d.apps[category][app] || 0) + seconds;
         cursor = next;
       }
     }

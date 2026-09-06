@@ -8,14 +8,14 @@ The app runs on your computer. It does not send usage records to a hosted servic
 
 | View | Records |
 | --- | --- |
-| Activity | Time spent in broad app categories on Mac and Windows, excluding away time |
+| Activity | Time spent in app categories and recognized apps on Mac and Windows, excluding away time |
 | Tokens | Daily Codex token counts from Mac, Ubuntu and configured native Windows logs, including cached input |
-| Agents | The latest saved result from each recorded Antigravity conversation |
+| Agents | Antigravity receipts, saved local-model benchmarks and partial Codex tool-call counts |
 | Sources | Which sources were read and which measurements are still missing |
 
-Activity offers a daily timeline and a combined Mac and Windows total. Overlapping intervals count once. Simultaneous activity in different categories is labeled mixed activity, since foreground records cannot establish which device had your attention. Token counts remain separate by host.
+Activity offers a daily timeline and a combined Mac and Windows total. Overlapping intervals count once. Simultaneous activity in different categories is labeled Device overlap, since foreground records cannot establish which device had your attention. Token counts remain separate by host.
 
-This is an early prototype tested on one Mac, Windows and WSL setup. It does not yet track live subscription limits, every terminal command, iPhone activity or Gemini website usage. The Antigravity adapter currently reads four named receipt files from one configured directory.
+This is an early prototype tested on one Mac, Windows and WSL setup. Optional adapters now read current Codex limits, saved reasoning and speed settings, tool-call categories and local benchmark receipts. It does not capture every terminal command, iPhone activity, Gemini website usage or other providers' live limits. The Antigravity adapter currently reads four named receipt files from one configured directory. [Source coverage](docs/SOURCE-COVERAGE.md) explains what each measurement can establish.
 
 ## Try the demo
 
@@ -58,6 +58,8 @@ For native Windows tokens, optionally set `windowsCodexHome` to the Windows Code
 
 Copy `local.config.example.json` to `local.config.json`. Set the executable paths, SSH aliases and receipt directory for your machines. Keep credentials in your existing SSH and provider settings.
 
+The settings and local-model adapters use Python 3.9 or later on the reader's machine. Configure only the optional sources you want. `codexExecutable` enables the read-only Codex limit check. `macCodexHome`, `ubuntuCodexHome` and `windowsCodexHome` enable saved settings and tool metadata. `localModelResults` points to a benchmark directory containing run subdirectories and `*.metrics.json` files. These readers do not run inference.
+
 ```sh
 npm run collect
 ```
@@ -80,7 +82,7 @@ The small API comparison uses standard short-context rates from [OpenAI's price 
 
 ## Data and security
 
-Window titles remain in ActivityWatch on their original machines. Windows sends only timestamps and approved category labels over SSH. The collector uses those intervals in memory to remove overlap, then stores daily totals and hourly buckets in `public/local/usage.json`. Exact intervals, raw titles, prompts, commands and credentials are not stored in the dashboard snapshot.
+Window titles remain in ActivityWatch on their original machines. Windows sends only timestamps and approved category and app labels over SSH. The collector uses those intervals in memory to remove overlap, then stores daily totals, app breakdowns and hourly buckets in `public/local/usage.json`. Exact intervals, raw titles, prompts, commands and credentials are not stored in the dashboard snapshot.
 
 Git excludes personal configuration, snapshots and generated builds. A generated build may contain a copy of your snapshot, so do not upload it. Deleting the snapshot clears the dashboard without deleting the original tool records.
 

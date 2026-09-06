@@ -21,9 +21,20 @@ $intervals = @(foreach ($event in $result[0]) {
   elseif ($app -match '(?i)terminal|powershell|cmd\.exe|conhost|wezterm|ubuntu') { $category='Terminal' }
   elseif ($app -match '(?i)chrome|firefox|msedge|brave|safari') { $category='Browser' }
   $duration = [double]$event.duration
+  $label = 'Other app'
+  if ($app -match '(?i)codex') { $label='Codex' }
+  elseif ($app -match '(?i)chatgpt') { $label='ChatGPT / Codex' }
+  elseif ($app -match '(?i)antigravity') { $label='Antigravity' }
+  elseif ($app -match '(?i)cursor') { $label='Cursor' }
+  elseif ($app -match '(?i)code\.exe|visual studio code') { $label='VS Code' }
+  elseif ($app -match '(?i)chrome') { $label='Chrome' }
+  elseif ($app -match '(?i)msedge|microsoft edge') { $label='Edge' }
+  elseif ($app -match '(?i)safari') { $label='Safari' }
+  elseif ($app -match '(?i)firefox') { $label='Firefox' }
+  elseif ($category -eq 'Terminal') { $label='Terminal' }
   if ([double]::IsNaN($duration) -or [double]::IsInfinity($duration) -or $duration -lt 0) { throw 'Invalid duration' }
   $eventStart = [DateTimeOffset]::Parse($event.timestamp)
-  [pscustomobject]@{start=$eventStart.ToString('o');end=$eventStart.AddSeconds($duration).ToString('o');category=$category}
+  [pscustomobject]@{start=$eventStart.ToString('o');end=$eventStart.AddSeconds($duration).ToString('o');category=$category;app=$label}
 })
 $latest = Invoke-RestMethod -Uri "$base/buckets/$([Uri]::EscapeDataString($windows[0].Name))/events?limit=1" -TimeoutSec 10
 [pscustomobject]@{host='Windows';status='ok';start=$start.ToString('o');end=$end.ToString('o');latestEvent=$latest[0].timestamp;intervals=$intervals} | ConvertTo-Json -Compress -Depth 5

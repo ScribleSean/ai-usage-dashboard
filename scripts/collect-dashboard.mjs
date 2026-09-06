@@ -3,8 +3,10 @@ import { promisify } from 'node:util';
 import { readFile, writeFile, rename, mkdir, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { cleanIntervals, summarize } from './activity-timeline.mjs';
+import { cleanIntervals, summarize, appLabel } from './activity-timeline.mjs';
 import { estimate } from './api-estimate.mjs';
+import { readQuota } from './read-quota.mjs';
+import { pythonReport } from './python-report.mjs';
 const exec = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const fields = [
@@ -17,6 +19,17 @@ const fields = [
 ];
 export function numeric(x) {
   return typeof x === 'number' && Number.isFinite(x) && x >= 0 ? x : null;
+}
+export function cleanSettings(raw, host) {
+  if (!Array.isArray(raw.profiles) || !Array.isArray(raw.tools)) throw Error('Invalid settings report');
+  const profiles = raw.profiles.filter(r => /^\d{4}-\d{2}-\d{2}$/.test(r.date) && /^[a-zA-Z0-9._:/-]{1,100}$/.test(r.model)).map(r => ({
+    date:r.date, model:r.model,
+    effort:['none','minimal','low','medium','high','xhigh','max','ultra'].includes(r.effort)?r.effort:'unknown',
+    speed:['standard','fast'].includes(r.speed)?r.speed:'unknown',
+    ...Object.fromEntries(fields.map(k=>[k,numeric(r[k])])),
+  }));
+  const tools = raw.tools.filter(r => /^\d{4}-\d{2}-\d{2}$/.test(r.date) && ['Shell','File edits','Browser','Research','Other tools'].includes(r.category) && numeric(r.count)!==null).map(r=>({date:r.date,category:r.category,count:r.count}));
+  return {host,status:'ok',profiles,tools};
 }
 export function category(app) {
   if (/codex|chatgpt|antigravity/i.test(app)) return 'AI apps';
@@ -117,7 +130,7 @@ async function macActivity() {
   });
   const intervals = events.map(e => {
     if (numeric(e.duration) === null) throw Error('Invalid duration');
-    return { start: e.timestamp, end: new Date(Date.parse(e.timestamp) + e.duration * 1000).toISOString(), category: category(String(e.data?.app)) };
+    return { start: e.timestamp, end: new Date(Date.parse(e.timestamp) + e.duration * 1000).toISOString(), category: category(String(e.data?.app)), app:appLabel(e.data?.app) };
   });
   const latest = await api(`/buckets/${encodeURIComponent(w)}/events?limit=1`);
   return cleanActivity(
@@ -169,6 +182,7 @@ export async function collect() {
   for (const key of ['macCcusage', 'ubuntuCcusage'])
     if (!/^\/[a-zA-Z0-9_./-]+$/.test(config[key]))
       throw Error('Invalid configured executable');
+  if (config.codexExecutable && !/^\/[a-zA-Z0-9_./-]+$/.test(config.codexExecutable)) throw Error('Invalid Codex executable');
   if (config.windowsCodexHome && !/^\/mnt\/[a-z]\/[a-zA-Z0-9_./-]+$/.test(config.windowsCodexHome))
     throw Error('Invalid Windows log directory');
   for (const key of ['windowsHost', 'ubuntuHost'])
@@ -183,7 +197,7 @@ export async function collect() {
     path.join(root, 'scripts/windows-aggregate-activity.ps1'),
     'utf8',
   );
-  const [mac, windows, macTokens, wslTokens, windowsTokens] = await Promise.all([
+  const [mac, windows, macTokens, wslTokens, windowsTokens, quota, localModel] = await Promise.all([
     guarded('Mac', macActivity),
     guarded('Windows', async () =>
       cleanActivity(
@@ -228,8 +242,22 @@ export async function collect() {
         'env CODEX_HOME=' + config.windowsCodexHome + ' ' + config.ubuntuCcusage +
         ' codex daily --offline --no-cost --timezone America/New_York --json']), 'Windows'
     )) : Promise.resolve({ host: 'Windows', status: 'not-connected' }),
+    config.codexExecutable ? guarded('Codex', () => readQuota(config.codexExecutable)) : Promise.resolve({status:'not-connected'}),
+    config.localModelResults ? guarded('Ubuntu', async () => {
+      const raw=await pythonReport(config.ubuntuHost, await readFile(path.join(root,'scripts/read-local-model.py'),'utf8'),config.localModelResults);
+      if (!Array.isArray(raw.records)) throw Error('Invalid local receipts');
+      return {host:'Ubuntu',status:'ok',records:raw.records.map(r=>({
+        model:typeof r.model==='string' && /^[a-zA-Z0-9._:/-]{1,100}$/.test(r.model)?r.model:'unknown',
+        status:r.status==='complete'?'complete':'incomplete', recordedAt:Number.isFinite(Date.parse(r.recordedAt))?new Date(r.recordedAt).toISOString():null,
+        ...Object.fromEntries(['seconds','input','cached','output','ttft','peakGpuMiB'].map(k=>[k,numeric(r[k])]))
+      }))};
+    }) : Promise.resolve({host:'Ubuntu',status:'not-connected'}),
   ]);
   const rows = [];
+  const settingsScript = await readFile(path.join(root,'scripts/read-settings.py'),'utf8');
+  const settings = await Promise.all([
+    ['Mac',null,config.macCodexHome], ['Ubuntu',config.ubuntuHost,config.ubuntuCodexHome], ['Windows',config.ubuntuHost,config.windowsCodexHome]
+  ].map(([host,ssh,folder])=>folder?guarded(host,async()=>cleanSettings(await pythonReport(ssh,settingsScript,folder),host)):Promise.resolve({host,status:'not-connected'})));
   for (const name of ['run', 'followup', 'safety', 'runtime']) {
     const f = path.join(config.receiptDirectory, name + '.usage.json');
     try {
@@ -254,7 +282,9 @@ export async function collect() {
     combined,
     tokens: [macTokens, wslTokens, windowsTokens],
     agents: cleanReceipts(rows),
-    quota: { status: 'not-connected' },
+    quota,
+    localModel,
+    settings,
   };
   const folder = path.join(root, 'public/local');
   await mkdir(folder, { recursive: true, mode: 0o700 });

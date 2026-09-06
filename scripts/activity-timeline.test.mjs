@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cleanIntervals, summarize } from './activity-timeline.mjs';
+test('app detail is allowlisted and overlap is counted once', () => {
+  const start='2026-09-06T04:00:00Z', end='2026-09-06T06:00:00Z';
+  const a={start,end:'2026-09-06T05:00:00Z',category:'AI apps',app:'Codex'};
+  const r=summarize(cleanIntervals([a,{...a,app:'private-secret'}],start,end),start,end);
+  assert.equal(r.days[0].apps['AI apps']['Multiple apps'],3600);
+  assert.equal(r.days[0].seconds,3600);
+  assert.ok(!JSON.stringify(r).includes('private-secret'));
+});
 const start = '2026-09-06T04:00:00Z', end = '2026-09-07T04:00:00Z';
 const row = (a, b, category = 'AI apps') => ({ start: `2026-09-06T${a}:00Z`, end: `2026-09-06T${b}:00Z`, category, title: 'private' });
 test('overlap counts once with explicit mixed categories', () => {
