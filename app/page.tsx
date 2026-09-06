@@ -254,14 +254,14 @@ export default function Home() {
                   >
                     {activitySources.map((a) => (
                       <TabsTrigger value={a.host} key={a.host}>
-                        <span>
+                        <span className="device-icon">
                           {a.host === 'Mac' ? (
                             <Laptop size={18} />
                           ) : (
                             <Monitor size={18} />
                           )}
                         </span>
-                        {a.host}
+                        <span className="device-name">{a.host}</span>
                         <span className="device-time">
                           {a.status === 'ok'
                             ? (sum(a.days?.find(d => d.date === activeDate)?.categories || (a.days ? {} : a.categories)) / 3600).toFixed(1) + 'h'
