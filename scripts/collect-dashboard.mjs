@@ -44,7 +44,7 @@ export function cleanTokens(raw, host) {
       return {
         date: d.date,
         ...Object.fromEntries(fields.map((k) => [k, numeric(d[k])])),
-        models,
+        models: models.map(m => ({ ...m, apiEstimate: estimate([m]) })),
         apiEstimate: estimate(models),
       };
     })

@@ -71,6 +71,13 @@ test('invalid token schema fails closed', () => {
   assert.throws(() => cleanTokens({}, 'Mac'));
   assert.throws(() => cleanTokens({ daily: [{ date: 'bad' }] }, 'Mac'));
 });
+test('per-model pricing excludes inferred labels and preserves token categories', () => {
+  const c = {inputTokens:1000000,cacheReadTokens:1000000,cacheCreationTokens:0,outputTokens:1000000,totalTokens:3000000};
+  const result = cleanTokens({daily:[{date:'2026-09-06',models:{'gpt-6-astra':c,'gpt-5.6-sol':{...c,isFallback:true}}}]},'Mac');
+  assert.equal(result.days[0].models[0].apiEstimate.usd,61);
+  assert.equal(result.days[0].models[1].apiEstimate.usd,null);
+  assert.equal(result.days[0].models[0].cacheReadTokens,1000000);
+});
 test('continued conversation keeps latest snapshot, never sums counters', () => {
   const v = {
     conversationId: 'same',

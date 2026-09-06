@@ -15,10 +15,14 @@ import {
   Globe,
   Code2,
   Shapes,
+  ChevronLeft,
+  ChevronRight,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import {
   Table,
   TableHeader,
@@ -35,7 +39,7 @@ type Tokens = {
   inputTokens: number | null;
   cacheReadTokens: number | null;
   outputTokens: number | null;
-  models: { model: string; inferred: boolean }[];
+  models: { model: string; inferred: boolean; inputTokens?: number | null; cacheReadTokens?: number | null; cacheCreationTokens?: number | null; outputTokens?: number | null; totalTokens?: number | null; apiEstimate?: { usd: number | null } }[];
 };
 type ActivityRow = {
   host: string;
@@ -74,6 +78,12 @@ const time = (seconds: number) => {
   const minutes = Math.round(seconds / 60);
   return { hours: Math.floor(minutes / 60), minutes: minutes % 60 };
 };
+const shiftDate = (date: string, days: number) => {
+  const d = new Date(date + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+const dateLabel = (date: string) => date ? new Date(date + 'T12:00:00Z').toLocaleDateString('en-US', {month:'short',day:'numeric',timeZone:'UTC'}) : 'No records';
 const sum = (c: Record<string, number> | undefined) =>
   Object.values(c || {}).reduce((s, n) => s + n, 0);
 const icons: Record<string, typeof Activity> = {
@@ -100,13 +110,36 @@ function State({ children }: { children: React.ReactNode }) {
   );
 }
 export default function Home() {
+  const [dark, setDark] = useState(false);
+  useEffect(() => {
+    const query = matchMedia('(prefers-color-scheme: dark)');
+    const sync = () => {
+      let saved: string | null = null;
+      try { saved = localStorage.getItem('usage-theme'); } catch {}
+      const next = saved === 'dark' || (saved !== 'light' && query.matches);
+      document.documentElement.dataset.theme = next ? 'dark' : 'light';
+      setDark(next);
+    };
+    sync();
+    query.addEventListener('change', sync);
+    window.addEventListener('storage', sync);
+    return () => { query.removeEventListener('change', sync); window.removeEventListener('storage', sync); };
+  }, []);
+  const toggleTheme = () => {
+    const next = !dark;
+    setDark(next);
+    document.documentElement.dataset.theme = next ? 'dark' : 'light';
+    try { localStorage.setItem('usage-theme', next ? 'dark' : 'light'); } catch {}
+  };
   const [data, setData] = useState<Report | null>(null),
     [error, setError] = useState(false),
     [loading, setLoading] = useState(true);
   const [view, setView] = useState('activity'),
     [host, setHost] = useState('Combined'),
     [selectedDate, setSelectedDate] = useState(''),
+    [period, setPeriod] = useState('day'),
     [tokenHost, setTokenHost] = useState('Mac'),
+    [tokenDate, setTokenDate] = useState(''),
     [mobile, setMobile] = useState(false);
   const load = useCallback(async () => {
     setLoading(true);
@@ -143,12 +176,21 @@ export default function Home() {
   const current = activitySources.find((a) => a.host === host) || activitySources[0];
   const activeDate = selectedDate || current?.days?.at(-1)?.date || '';
   const dailyActivity = current?.days?.find(d => d.date === activeDate);
-  const shownCategories = dailyActivity?.categories || (current?.days ? undefined : current?.categories);
+  const weekDays = activeDate ? Array.from({length:7},(_,i) => {
+    const date = shiftDate(activeDate, i-6);
+    return {date, record:current?.days?.find(d => d.date === date)};
+  }) : [];
+  const weeklyCategories: Record<string, number> = {};
+  weekDays.forEach(({record}) => Object.entries(record?.categories || {}).forEach(([k,v]) => {weeklyCategories[k] = (weeklyCategories[k] || 0) + v;}));
+  const shownCategories = period === 'week' && current?.days ? weeklyCategories : dailyActivity?.categories || (current?.days ? undefined : current?.categories);
+  const earliest = current?.days?.[0]?.date, newest = current?.days?.at(-1)?.date;
+  const previousDate = activeDate ? shiftDate(activeDate,period === 'week' ? -7 : -1) : '';
+  const nextDate = activeDate ? shiftDate(activeDate,period === 'week' ? 7 : 1) : '';
   const seconds = sum(shownCategories),
     clock = time(seconds);
   const tokenSource = data?.tokens.find((t) => t.host === tokenHost),
     days = tokenSource?.days?.slice(-7) || [],
-    latest = days.at(-1);
+    latest = days.find(d => d.date === tokenDate) || days.at(-1);
   const sourceCount = data
     ? [...data.activity, ...data.tokens].filter((x) => x.status === 'ok').length
     : 0;
@@ -167,17 +209,23 @@ export default function Home() {
         <div className="app-actions">
           <span className="local-label">
             <i />
-            {data?.demo ? 'Synthetic demo' : 'On this computer'}
+            {data?.demo ? 'Synthetic demo' : 'Private dashboard'}
           </span>
           <Button
             variant="ghost"
             className="reload"
+            aria-label={loading ? 'Loading snapshot' : 'Reload snapshot'}
             onClick={() => void load()}
             disabled={loading}
             title="Reload the saved snapshot. To collect new records, run npm run collect."
           >
             <RefreshCw size={18} />
             <span>{loading ? 'Loading' : 'Reload snapshot'}</span>
+          </Button>
+          <Button variant="ghost" className="theme-toggle" onClick={toggleTheme}
+            aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={dark ? 'Switch to light mode' : 'Switch to dark mode'}>
+            {dark ? <Sun size={20} aria-hidden="true" /> : <Moon size={20} aria-hidden="true" />}
           </Button>
         </div>
       </header>
@@ -237,11 +285,18 @@ export default function Home() {
                     <h1>Activity</h1>
                     <p>Recorded app activity, with away time removed.</p>
                   </div>
-                  <label className="day-picker">Day · New York
-                    <Input type="date" aria-label="Activity date" value={activeDate}
-                      min={current?.days?.[0]?.date} max={current?.days?.at(-1)?.date}
-                      onChange={e => setSelectedDate(e.target.value)} />
-                  </label>
+                  <div className="period-controls">
+                    <ToggleGroup value={[period]} onValueChange={v => v[0] && setPeriod(v[0])} aria-label="Activity period" className="period-switch">
+                      <ToggleGroupItem value="day">Day</ToggleGroupItem>
+                      <ToggleGroupItem value="week">Week</ToggleGroupItem>
+                    </ToggleGroup>
+                    <div className="date-navigation">
+                      <Button variant="ghost" aria-label={`Previous ${period}`} disabled={!earliest || previousDate < earliest} onClick={() => setSelectedDate(previousDate)}><ChevronLeft size={18}/></Button>
+                      <span aria-live="polite">{period === 'week' && activeDate ? `${dateLabel(shiftDate(activeDate,-6))} to ${dateLabel(activeDate)}` : dateLabel(activeDate)}</span>
+                      <Button variant="ghost" aria-label={`Next ${period}`} disabled={!newest || nextDate > newest} onClick={() => setSelectedDate(nextDate)}><ChevronRight size={18}/></Button>
+                    </div>
+                    <small>New York time</small>
+                  </div>
                 </div>
                 <Tabs
                   value={host}
@@ -263,15 +318,22 @@ export default function Home() {
                         </span>
                         <span className="device-name">{a.host}</span>
                         <span className="device-time">
-                          {a.status === 'ok'
+                          {period === 'day' && a.status === 'ok'
                             ? (sum(a.days?.find(d => d.date === activeDate)?.categories || (a.days ? {} : a.categories)) / 3600).toFixed(1) + 'h'
-                            : 'Unknown'}
+                            : period === 'week' && a.status === 'ok' ? '7 days' : 'Unknown'}
                         </span>
                       </TabsTrigger>
                     ))}
                   </TabsList>
                 <TabsContent value={host}>
-                {dailyActivity && <section className="daily-timeline" aria-label="Recorded activity by hour">
+                {period === 'week' && <section className="weekly-timeline" aria-label="Recorded activity over seven days">
+                  {weekDays.map(({date,record}) => <Button key={date} variant="ghost" className="week-day" aria-label={`${date}: ${record ? Math.round(record.seconds / 60) + ' recorded minutes' : 'outside collected window'}. Open day.`} disabled={!record} onClick={() => {setSelectedDate(date);setPeriod('day');}}>
+                    <span className="week-bar-space"><span className="week-bar" style={{height:record?.seconds ? `${Math.max(4, record.seconds / Math.max(1,...weekDays.map(d => d.record?.seconds || 0)) * 100)}%` : '3px'}}/></span>
+                    <strong>{new Date(date+'T12:00:00Z').toLocaleDateString('en-US',{weekday:'short',timeZone:'UTC'})}</strong>
+                    <small>{record ? `${(record.seconds/3600).toFixed(1)}h` : 'Unknown'}</small>
+                  </Button>)}
+                </section>}
+                {period === 'day' && dailyActivity && <section className="daily-timeline" aria-label="Recorded activity by hour">
                   <div className="hour-track">{dailyActivity.hours.map((n, hour) => <span key={hour}
                     style={{ opacity: n ? 0.25 + 0.75 * Math.min(1, n / 3600) : 0.08 }}
                     title={`${hour}:00, ${Math.round(n / 60)} minutes recorded`} />)}</div>
@@ -290,7 +352,7 @@ export default function Home() {
                         <span>h</span> {clock.minutes}
                         <span>m</span>
                       </div>
-                      <p>{dailyActivity ? `Recorded on ${activeDate}` : 'Across the recorded seven-day window'}</p>
+                      <p>{period === 'week' ? 'Recorded in this seven-day window. Coverage may be partial.' : dailyActivity ? `Recorded on ${activeDate}` : 'Across the recorded seven-day window'}</p>
                       <div
                         className="segmented-track"
                         aria-label="Activity category proportions"
@@ -416,7 +478,7 @@ export default function Home() {
                   <div className="token-layout">
                     <section className="token-summary">
                       <span className="surface-label">
-                        Latest recorded day · {latest?.date}
+                        Selected day · {latest?.date}
                       </span>
                       <div className="token-number">
                         {latest?.totalTokens == null
@@ -449,9 +511,32 @@ export default function Home() {
                     </section>
                     <section className="table-surface">
                       <div className="table-heading">
-                        <h2>Daily history</h2>
-                        <span>7 latest recorded dates</span>
+                        <h2>By model</h2>
+                        <span>{latest?.date}</span>
                       </div>
+                      <div className="model-breakdown">
+                        {[...(latest?.models || [])].sort((a,b) => (b.totalTokens || 0) - (a.totalTokens || 0)).map(m => (
+                          <details className="model-detail" key={m.model}>
+                            <summary>
+                              <span className="model-label">{m.model.replace(/^gpt-/,'GPT ').replace(/-(astra|terra|sol|luna)$/i, (_, name: string) => ' ' + name[0].toUpperCase() + name.slice(1))}{m.inferred && <small>Inferred label</small>}</span>
+                              <span className="model-amount" title={`${fmt(m.totalTokens)} tokens`}>{m.totalTokens == null ? 'Unknown' : compact(m.totalTokens)}<small>{m.totalTokens != null && latest?.totalTokens ? `${(m.totalTokens / latest.totalTokens * 100).toFixed(1)}% of tokens` : 'Share unknown'}</small></span>
+                              <span className="model-share" aria-hidden="true"><span style={{width: `${Math.min(100, Math.max(0, (m.totalTokens || 0) / (latest?.totalTokens || 1) * 100))}%`}} /></span>
+                              <ChevronRight className="model-expand" size={16} aria-hidden="true" />
+                            </summary>
+                            <p className="model-id">{m.model} · {fmt(m.totalTokens)} tokens</p>
+                            <dl className="model-counts">
+                              <div><dt>Uncached input</dt><dd>{fmt(m.inputTokens)}</dd></div>
+                              <div><dt>Cached input</dt><dd>{fmt(m.cacheReadTokens)}</dd></div>
+                              <div><dt>Cache writes</dt><dd>{fmt(m.cacheCreationTokens)}</dd></div>
+                              <div><dt>Output</dt><dd>{fmt(m.outputTokens)}</dd></div>
+                            </dl>
+                            <p className="model-estimate">API comparison: {m.apiEstimate?.usd == null ? 'Unknown' : `$${m.apiEstimate.usd.toFixed(2)}`}<span>Not actual spend. Standard short-context scenario.</span></p>
+                          </details>
+                        ))}
+                        {!latest?.models.length && <p>No model breakdown in this report.</p>}
+                      </div>
+                      <details className="model-history">
+                        <summary>Choose another recorded day</summary>
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -464,7 +549,7 @@ export default function Home() {
                         <TableBody>
                           {[...days].reverse().map((d) => (
                             <TableRow key={d.date}>
-                              <TableCell>{d.date}</TableCell>
+                              <TableCell><Button variant="ghost" aria-pressed={latest?.date === d.date} onClick={() => setTokenDate(d.date)}>{d.date}</Button></TableCell>
                               <TableCell className="align-right">
                                 {fmt(d.totalTokens)}
                               </TableCell>
@@ -472,6 +557,7 @@ export default function Home() {
                           ))}
                         </TableBody>
                       </Table>
+                      </details>
                     </section>
                   </div>
                 ) : (
@@ -490,11 +576,10 @@ export default function Home() {
                     {latest?.models
                       .map((m) => m.model + (m.inferred ? ' (inferred)' : ''))
                       .join(', ') || 'No model records'}
-                    . Totals are reported by ccusage; cached tokens can
+                    . Totals are reported by ccusage. Cached tokens can
                     dominate. Records from different hosts are not added
                     together until mirrored-session deduplication is verified.
-                    These are the latest recorded dates, which may have gaps. No
-                    dollar estimate or live quota is inferred.
+                    These are the latest recorded dates, which may have gaps. API comparisons are hypothetical and partial, not actual spending or remaining quota.
                   </p>
                 </details>
               </TabsContent>
@@ -641,7 +726,7 @@ export default function Home() {
             </>
           )}
           <footer>
-            <span>Your usage records stay on this computer.</span>
+            <span>Saved records stay on the dashboard host.</span>
             <a
               href="https://github.com/ScribleSean/ai-usage-dashboard"
               target="_blank"

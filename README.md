@@ -19,6 +19,10 @@ This is an early prototype tested on one Mac, Windows and WSL setup. It does not
 
 ## Try the demo
 
+Activity opens in Day view with previous/next controls. Week shows seven days ending on the selected date. Select a bar to open that day. Navigation stops at the available collected window.
+
+Tokens shows model-level counts and shares. Expand a model for its token categories and supported API-equivalent estimate. The recorded-day selector lets you review older days. [Research notes](docs/USAGE-TRACKING-REFERENCES.md) describe the open-source patterns behind the accounting.
+
 You need Node.js 22.13 or later.
 
 ```sh
@@ -33,6 +37,18 @@ npm run serve:local
 Open [localhost:5601](http://127.0.0.1:5601). The demo uses made-up records and labels them as sample data. It refuses to overwrite an existing snapshot. You do not need an AI account, ActivityWatch or an SSH connection to try it.
 
 ## Connect your own records
+
+The top-bar sun and moon button switches between light and dark themes. It follows your system preference until you choose a theme, then saves that choice in this browser.
+
+### View the same instance on another computer
+
+No second collector or repository clone is needed just to view the dashboard. With a trusted SSH connection from the dashboard host to the viewing computer, run this on the dashboard host:
+
+```sh
+ssh -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -R 127.0.0.1:5601:127.0.0.1:5601 VIEWER_SSH_ALIAS
+```
+
+Open `http://127.0.0.1:5601` on the viewing computer. The host, local server and SSH tunnel must remain running. This is not automatic startup. Stop the tunnel with Ctrl+C. Keep the remote listener restricted to loopback and verify your SSH server permits this forwarding. Do not expose this unauthenticated dashboard to a public or shared network.
 
 The current collector runs on macOS. It expects ActivityWatch on the Mac and Windows PC, ccusage on the Mac and Ubuntu, and working SSH aliases for Windows and Ubuntu.
 
