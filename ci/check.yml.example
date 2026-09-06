@@ -13,7 +13,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run test:collectors
+      - run: npm test
       - run: npx tsc --noEmit
       - run: npm run demo
       - run: npm run build

@@ -239,6 +239,9 @@ summary:focus-visible {
   margin-bottom: 18px;
   gap: 0 !important;
 }
+.host-tabs > [role='tabpanel'] {
+  margin-top: 18px;
+}
 .connected-buttons {
   display: flex !important;
   gap: 3px !important;

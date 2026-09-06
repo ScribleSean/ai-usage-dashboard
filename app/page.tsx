@@ -153,7 +153,7 @@ export default function Home() {
         <div className="app-actions">
           <span className="local-label">
             <i />
-            {data?.demo ? 'Synthetic demo' : 'On this Mac'}
+            {data?.demo ? 'Synthetic demo' : 'On this computer'}
           </span>
           <Button
             variant="ghost"
@@ -252,7 +252,7 @@ export default function Home() {
                       </TabsTrigger>
                     ))}
                   </TabsList>
-                </Tabs>
+                <TabsContent value={host}>
                 {current?.status === 'ok' && current.categories ? (
                   <div className="activity-layout">
                     <section className="time-surface">
@@ -325,6 +325,8 @@ export default function Home() {
                     This device’s activity source is unavailable. Its activity is unknown, not zero.
                   </State>
                 )}
+                </TabsContent>
+                </Tabs>
                 <div className="lower-strip">
                   <div>
                     <span className="status-dot" />
@@ -384,7 +386,7 @@ export default function Home() {
                       </TabsTrigger>
                     ))}
                   </TabsList>
-                </Tabs>
+                <TabsContent value={tokenHost}>
                 {tokenSource?.status === 'ok' && days.length ? (
                   <div className="token-layout">
                     <section className="token-summary">
@@ -449,6 +451,8 @@ export default function Home() {
                       : 'This token source is unavailable.'}
                   </State>
                 )}
+                </TabsContent>
+                </Tabs>
                 <details className="method-note">
                   <summary>Models & counting rules</summary>
                   <p>

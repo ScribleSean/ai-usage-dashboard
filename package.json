@@ -6,6 +6,8 @@
     "node": ">=22.13.0"
   },
   "scripts": {
+    "test": "node --test scripts/*.test.mjs",
+    "test:server": "node scripts/check-local-server.mjs",
     "demo": "node scripts/demo.mjs",
     "collect": "node scripts/collect-dashboard.mjs",
     "test:collectors": "node --test scripts/collect-dashboard.test.mjs",

@@ -67,7 +67,7 @@ Use `npm run serve:local` for viewing. It serves static files on the loopback ad
 ## Development
 
 ```sh
-npm run test:collectors
+npm test
 npx tsc --noEmit
 npm run build
 ```
@@ -79,6 +79,8 @@ Hosted CI is not enabled. [ci/check.yml.example](ci/check.yml.example) contains 
 The design draws on [lnkiai/m3e-canvas](https://github.com/lnkiai/m3e-canvas), including its Material 3 Expressive navigation, connected controls and tonal surfaces. [Design notes](docs/DESIGN.md) explain how those ideas apply here.
 
 ## Contributing
+
+With the local dashboard running, `npm run test:server` checks request restrictions without reading or printing your usage records.
 
 Reproducible bugs, adapter improvements and accessibility fixes are welcome. Use synthetic examples in issues and pull requests. Do not attach personal usage records, transcripts or account details.
 
