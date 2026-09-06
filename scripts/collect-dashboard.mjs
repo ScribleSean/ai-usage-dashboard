@@ -169,6 +169,8 @@ export async function collect() {
   for (const key of ['macCcusage', 'ubuntuCcusage'])
     if (!/^\/[a-zA-Z0-9_./-]+$/.test(config[key]))
       throw Error('Invalid configured executable');
+  if (config.windowsCodexHome && !/^\/mnt\/[a-z]\/[a-zA-Z0-9_./-]+$/.test(config.windowsCodexHome))
+    throw Error('Invalid Windows log directory');
   for (const key of ['windowsHost', 'ubuntuHost'])
     if (!/^[a-zA-Z0-9][a-zA-Z0-9.-]*$/.test(config[key]))
       throw Error('Invalid SSH alias');
@@ -181,7 +183,7 @@ export async function collect() {
     path.join(root, 'scripts/windows-aggregate-activity.ps1'),
     'utf8',
   );
-  const [mac, windows, macTokens, wslTokens] = await Promise.all([
+  const [mac, windows, macTokens, wslTokens, windowsTokens] = await Promise.all([
     guarded('Mac', macActivity),
     guarded('Windows', async () =>
       cleanActivity(
@@ -221,6 +223,11 @@ export async function collect() {
         'Ubuntu',
       ),
     ),
+    config.windowsCodexHome ? guarded('Windows', async () => cleanTokens(
+      await command('ssh', ['-oBatchMode=yes', '-oConnectTimeout=8', config.ubuntuHost,
+        'env CODEX_HOME=' + config.windowsCodexHome + ' ' + config.ubuntuCcusage +
+        ' codex daily --offline --no-cost --timezone America/New_York --json']), 'Windows'
+    )) : Promise.resolve({ host: 'Windows', status: 'not-connected' }),
   ]);
   const rows = [];
   for (const name of ['run', 'followup', 'safety', 'runtime']) {
@@ -245,7 +252,7 @@ export async function collect() {
     timezone: 'America/New_York',
     activity: [mac, windows].map(({ intervals, ...safe }) => safe),
     combined,
-    tokens: [macTokens, wslTokens, { host: 'Windows', status: 'not-connected' }],
+    tokens: [macTokens, wslTokens, windowsTokens],
     agents: cleanReceipts(rows),
     quota: { status: 'not-connected' },
   };

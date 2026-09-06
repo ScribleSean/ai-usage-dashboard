@@ -3,5 +3,6 @@
   "ubuntuCcusage": "/absolute/path/to/ccusage",
   "ubuntuHost": "your-ubuntu-ssh-alias",
   "windowsHost": "your-windows-ssh-alias",
+  "windowsCodexHome": "/mnt/c/Users/YOUR_USER/.codex",
   "receiptDirectory": "/absolute/path/to/review-receipts"
 }

@@ -9,7 +9,7 @@ The app runs on your computer. It does not send usage records to a hosted servic
 | View | Records |
 | --- | --- |
 | Activity | Time spent in broad app categories on Mac and Windows, excluding away time |
-| Tokens | Daily Codex token counts from Mac and Ubuntu, including cached input |
+| Tokens | Daily Codex token counts from Mac, Ubuntu and configured native Windows logs, including cached input |
 | Agents | The latest saved result from each recorded Antigravity conversation |
 | Sources | Which sources were read and which measurements are still missing |
 
@@ -51,6 +51,8 @@ ssh -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCount
 Open `http://127.0.0.1:5601` on the viewing computer. The host, local server and SSH tunnel must remain running. This is not automatic startup. Stop the tunnel with Ctrl+C. Keep the remote listener restricted to loopback and verify your SSH server permits this forwarding. Do not expose this unauthenticated dashboard to a public or shared network.
 
 The current collector runs on macOS. It expects ActivityWatch on the Mac and Windows PC, ccusage on the Mac and Ubuntu, and working SSH aliases for Windows and Ubuntu.
+
+For native Windows tokens, optionally set `windowsCodexHome` to the Windows Codex directory as seen from WSL, such as `/mnt/c/Users/YOUR_USER/.codex`. The installed Ubuntu reader processes those logs separately from Ubuntu logs. Only aggregate reports return to the dashboard. This uses ccusage's documented [Codex data directory override](https://github.com/ccusage/ccusage/blob/main/docs/guide/codex/index.md). Host reports remain separate because mirrored sessions may overlap.
 
 Copy `local.config.example.json` to `local.config.json`. Set the executable paths, SSH aliases and receipt directory for your machines. Keep credentials in your existing SSH and provider settings.
 
