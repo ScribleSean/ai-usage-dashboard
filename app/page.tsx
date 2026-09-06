@@ -59,6 +59,7 @@ type Agent = {
   failure?: string | null;
   id: string;
   model: string;
+  role?: string;
   status: string;
   seconds: number | null;
   total: number | null;
@@ -686,7 +687,7 @@ export default function Home() {
                         <Workflow size={23} />
                       </span>
                       <div className="agent-identity">
-                        <h2>{a.model}</h2>
+                        <h2>{a.model}{a.role && <span style={{fontWeight: 'normal', opacity: 0.8, fontSize: '0.85em'}}> &middot; {a.role}</span>}</h2>
                         <p>
                           {new Date(a.recordedAt).toLocaleDateString()} · latest
                           conversation snapshot

@@ -171,6 +171,7 @@ export function cleanReceipts(rows) {
     model: /^[a-zA-Z0-9._-]{1,100}$/.test(v.requestedModel)
       ? v.requestedModel
       : 'unknown',
+    role: typeof v.role === 'string' ? v.role : (v.isSubagent ? 'Subagent' : 'Coordinator'),
     status: v.status === 'SUCCESS' ? 'completed' : 'failed',
     failure: v.status !== 'SUCCESS' && /timeout/i.test(v.error || '') ? 'Response timed out. Cause not established.' : null,
     seconds: numeric(v.elapsedSeconds),
