@@ -1,0 +1,7 @@
+{
+  "macCcusage": "/absolute/path/to/ccusage",
+  "ubuntuCcusage": "/absolute/path/to/ccusage",
+  "ubuntuHost": "your-ubuntu-ssh-alias",
+  "windowsHost": "your-windows-ssh-alias",
+  "receiptDirectory": "/absolute/path/to/review-receipts"
+}
