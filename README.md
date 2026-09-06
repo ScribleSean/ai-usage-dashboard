@@ -42,6 +42,8 @@ The top-bar sun and moon button switches between light and dark themes. It follo
 
 ### View the same instance on another computer
 
+For optional login startup and restart recovery, see [Startup](docs/STARTUP.md).
+
 No second collector or repository clone is needed just to view the dashboard. With a trusted SSH connection from the dashboard host to the viewing computer, run this on the dashboard host:
 
 ```sh
