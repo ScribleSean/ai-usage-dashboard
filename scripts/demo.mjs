@@ -1,18 +1,27 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { cleanIntervals, summarize } from './activity-timeline.mjs';
 export function demoData() {
+  const start = '2026-09-05T04:00:00Z', end = '2026-09-06T04:00:00Z';
+  const intervals = cleanIntervals([
+    {start:'2026-09-05T13:00:00Z',end:'2026-09-05T14:00:00Z',category:'AI apps'},
+    {start:'2026-09-05T14:00:00Z',end:'2026-09-05T16:00:00Z',category:'Editors'},
+    {start:'2026-09-05T17:00:00Z',end:'2026-09-05T17:30:00Z',category:'Browser'},
+  ],start,end);
+  const windows = cleanIntervals([{start:'2026-09-05T15:00:00Z',end:'2026-09-05T16:30:00Z',category:'Terminal'}],start,end);
   return {
     demo: true,
-    schema: 1,
+    schema: 2,
+    combined: {host:'Combined',status:'ok',start,end,...summarize([...intervals,...windows],start,end)},
     collectedAt: new Date().toISOString(),
     activity: [
       {
         host: 'Mac',
         status: 'ok',
-        categories: { Coding: 7200, Terminal: 1800, Browser: 3600, Other: 900 },
+        start,end,...summarize(intervals,start,end),
       },
-      { host: 'Windows', status: 'unavailable' },
+      { host: 'Windows', status: 'ok', start,end,...summarize(windows,start,end) },
     ],
     tokens: [
       {
@@ -30,6 +39,7 @@ export function demoData() {
         ],
       },
       { host: 'Ubuntu', status: 'ok', days: [] },
+      { host: 'Windows', status: 'not-connected' },
     ],
     agents: [
       {

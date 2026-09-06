@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Table,
   TableHeader,
@@ -28,6 +29,7 @@ import {
 } from '@/components/ui/table';
 
 type Tokens = {
+  apiEstimate?: { usd: number | null; coveredTokens: number; excluded: number; checked: string };
   date: string;
   totalTokens: number | null;
   inputTokens: number | null;
@@ -42,8 +44,10 @@ type ActivityRow = {
   latestEvent?: string;
   start?: string;
   end?: string;
+  days?: { date: string; seconds: number; hours: number[]; categories: Record<string, number> }[];
 };
 type Agent = {
+  failure?: string | null;
   id: string;
   model: string;
   status: string;
@@ -52,6 +56,7 @@ type Agent = {
   recordedAt: string;
 };
 type Report = {
+  combined?: ActivityRow;
   demo?: boolean;
   collectedAt: string;
   activity: ActivityRow[];
@@ -72,6 +77,9 @@ const time = (seconds: number) => {
 const sum = (c: Record<string, number> | undefined) =>
   Object.values(c || {}).reduce((s, n) => s + n, 0);
 const icons: Record<string, typeof Activity> = {
+  'AI apps': Workflow,
+  Editors: Code2,
+  'Mixed activity': Layers3,
   Coding: Code2,
   Terminal,
   Browser: Globe,
@@ -96,7 +104,8 @@ export default function Home() {
     [error, setError] = useState(false),
     [loading, setLoading] = useState(true);
   const [view, setView] = useState('activity'),
-    [host, setHost] = useState('Mac'),
+    [host, setHost] = useState('Combined'),
+    [selectedDate, setSelectedDate] = useState(''),
     [tokenHost, setTokenHost] = useState('Mac'),
     [mobile, setMobile] = useState(false);
   const load = useCallback(async () => {
@@ -130,8 +139,12 @@ export default function Home() {
     q.addEventListener('change', changed);
     return () => q.removeEventListener('change', changed);
   }, [load]);
-  const current = data?.activity.find((a) => a.host === host),
-    seconds = sum(current?.categories),
+  const activitySources = data ? [...(data.combined ? [data.combined] : []), ...data.activity] : [];
+  const current = activitySources.find((a) => a.host === host) || activitySources[0];
+  const activeDate = selectedDate || current?.days?.at(-1)?.date || '';
+  const dailyActivity = current?.days?.find(d => d.date === activeDate);
+  const shownCategories = dailyActivity?.categories || (current?.days ? undefined : current?.categories);
+  const seconds = sum(shownCategories),
     clock = time(seconds);
   const tokenSource = data?.tokens.find((t) => t.host === tokenHost),
     days = tokenSource?.days?.slice(-7) || [],
@@ -139,6 +152,7 @@ export default function Home() {
   const sourceCount = data
     ? [...data.activity, ...data.tokens].filter((x) => x.status === 'ok').length
     : 0;
+  const sourceTotal = data ? data.activity.length + data.tokens.length : 0;
   return (
     <div className="app-shell">
       <header className="app-bar">
@@ -221,9 +235,13 @@ export default function Home() {
                 <div className="view-heading">
                   <div>
                     <h1>Activity</h1>
-                    <p>Foreground time, with away time removed.</p>
+                    <p>Recorded app activity, with away time removed.</p>
                   </div>
-                  <span className="period-chip">Last 7 days</span>
+                  <label className="day-picker">Day · New York
+                    <Input type="date" aria-label="Activity date" value={activeDate}
+                      min={current?.days?.[0]?.date} max={current?.days?.at(-1)?.date}
+                      onChange={e => setSelectedDate(e.target.value)} />
+                  </label>
                 </div>
                 <Tabs
                   value={host}
@@ -234,7 +252,7 @@ export default function Home() {
                     className="connected-buttons"
                     aria-label="Activity device"
                   >
-                    {data.activity.map((a) => (
+                    {activitySources.map((a) => (
                       <TabsTrigger value={a.host} key={a.host}>
                         <span>
                           {a.host === 'Mac' ? (
@@ -246,36 +264,43 @@ export default function Home() {
                         {a.host}
                         <span className="device-time">
                           {a.status === 'ok'
-                            ? (sum(a.categories) / 3600).toFixed(1) + 'h'
+                            ? (sum(a.days?.find(d => d.date === activeDate)?.categories || (a.days ? {} : a.categories)) / 3600).toFixed(1) + 'h'
                             : 'Unknown'}
                         </span>
                       </TabsTrigger>
                     ))}
                   </TabsList>
                 <TabsContent value={host}>
-                {current?.status === 'ok' && current.categories ? (
+                {dailyActivity && <section className="daily-timeline" aria-label="Recorded activity by hour">
+                  <div className="hour-track">{dailyActivity.hours.map((n, hour) => <span key={hour}
+                    style={{ opacity: n ? 0.25 + 0.75 * Math.min(1, n / 3600) : 0.08 }}
+                    title={`${hour}:00, ${Math.round(n / 60)} minutes recorded`} />)}</div>
+                  <div className="hour-labels"><span>12 AM</span><span>6 AM</span><span>Noon</span><span>6 PM</span><span>12 AM</span></div>
+                  <p>Recorded active minutes per hour. Gaps can mean idle time or missing records.</p>
+                </section>}
+                {current?.status === 'ok' && shownCategories ? (
                   <div className="activity-layout">
                     <section className="time-surface">
                       <div className="surface-label">
                         <Activity size={19} />
-                        <span>Active on {host}</span>
+                        <span>{current.host === 'Combined' ? 'Across both devices' : `Active on ${current.host}`}</span>
                       </div>
                       <div className="big-time">
                         {clock.hours}
                         <span>h</span> {clock.minutes}
                         <span>m</span>
                       </div>
-                      <p>Across the recorded seven-day window</p>
+                      <p>{dailyActivity ? `Recorded on ${activeDate}` : 'Across the recorded seven-day window'}</p>
                       <div
                         className="segmented-track"
                         aria-label="Activity category proportions"
                       >
-                        {Object.entries(current.categories)
+                        {Object.entries(shownCategories)
                           .filter(([, v]) => v > 0)
                           .map(([k, v]) => (
                             <span
                               key={k}
-                              className={'segment ' + k.toLowerCase()}
+                              className={'segment ' + k.toLowerCase().replaceAll(' ', '-')}
                               style={{ flex: v }}
                               title={k + ': ' + Math.round(v / 60) + ' min'}
                             />
@@ -283,21 +308,21 @@ export default function Home() {
                       </div>
                       <div className="surface-bottom">
                         <span>Foreground ≠ focus</span>
-                        <span>No combined device total</span>
+                        <span>{current.host === 'Combined' ? 'Overlap counted once' : 'One device'}</span>
                       </div>
                     </section>
                     <section
                       className="category-surface"
                       aria-label="Time by app category"
                     >
-                      {Object.entries(current.categories)
+                      {Object.entries(shownCategories)
                         .sort((a, b) => b[1] - a[1])
                         .map(([k, v]) => {
                           const Icon = icons[k] || Shapes;
                           return (
                             <div className="category-row" key={k}>
                               <span
-                                className={'category-icon ' + k.toLowerCase()}
+                                className={'category-icon ' + k.toLowerCase().replaceAll(' ', '-')}
                               >
                                 <Icon size={21} />
                               </span>
@@ -330,7 +355,7 @@ export default function Home() {
                 <div className="lower-strip">
                   <div>
                     <span className="status-dot" />
-                    <strong>{sourceCount}/4 sources read</strong>
+                    <strong>{sourceCount}/{sourceTotal} sources read</strong>
                     <span>Collector snapshot</span>
                   </div>
                   <p>
@@ -341,10 +366,10 @@ export default function Home() {
                   <summary>How this is measured</summary>
                   <p>
                     ActivityWatch window intervals are intersected with non-AFK
-                    intervals. Coding includes AI apps. Foreground time does not
+                    intervals. AI apps and editors are separate categories. Editor time can include AI-assisted work. Foreground time does not
                     prove attention or distinguish automation from human input.
-                    Devices may overlap, so hours are kept separate. Window
-                    categories are intentionally broad.
+                    The combined view counts simultaneous activity once. Different categories at the same time are labeled mixed activity.
+                    Missing collector history is not proof of inactivity. On daylight saving transitions, repeated clock hours share a chart cell.
                   </p>
                   <p>
                     Latest window event began:{' '}
@@ -360,7 +385,7 @@ export default function Home() {
                 <div className="view-heading">
                   <div>
                     <h1>Tokens</h1>
-                    <p>Token counts from your saved Codex records.</p>
+                    <p>Model workload, not hours worked. Activity shows recorded computer time.</p>
                   </div>
                   <span className="period-chip">America/New_York</span>
                 </div>
@@ -416,6 +441,11 @@ export default function Home() {
                       <p className="small-note">
                         Reasoning is included in output.
                       </p>
+                      <details className="estimate-note">
+                        <summary>API comparison: {latest?.apiEstimate?.usd == null ? 'Unknown' : `$${latest.apiEstimate.usd.toFixed(2)}`} {latest?.apiEstimate?.excluded ? '(partial)' : ''}</summary>
+                        <p>Hypothetical standard, short-context token price, not your bill. Covers {fmt(latest?.apiEstimate?.coveredTokens)} tokens. Inferred models and unsupported rates are excluded.</p>
+                        <p>Long-context rates, Fast mode, tool fees and unreported cache writes are not estimated. Rates checked {latest?.apiEstimate?.checked || 'not yet'} against <a href="https://developers.openai.com/api/docs/pricing" target="_blank" rel="noreferrer">OpenAI pricing</a>.</p>
+                      </details>
                     </section>
                     <section className="table-surface">
                       <div className="table-heading">
@@ -448,7 +478,7 @@ export default function Home() {
                   <State>
                     {tokenSource?.status === 'ok'
                       ? 'No recorded days found for this source.'
-                      : 'This token source is unavailable.'}
+                      : tokenSource?.status === 'not-connected' ? 'Native Windows token logs are not connected yet. Ubuntu covers WSL only, not the Windows app.' : 'This token source is unavailable.'}
                   </State>
                 )}
                 </TabsContent>
@@ -474,7 +504,7 @@ export default function Home() {
                     <h1>Agent work</h1>
                     <p>Agent requests and their recorded results.</p>
                   </div>
-                  <span className="period-chip">Review experiment</span>
+                  <span className="source-caption">Saved review runs</span>
                 </div>
                 <section className="agent-list">
                   {data.agents.map((a) => (
@@ -492,6 +522,7 @@ export default function Home() {
                           {new Date(a.recordedAt).toLocaleDateString()} · latest
                           conversation snapshot
                         </p>
+                        {a.failure && <p>{a.failure}</p>}
                       </div>
                       <div className="agent-metric">
                         <strong>
@@ -544,7 +575,7 @@ export default function Home() {
                     <h1>Sources</h1>
                     <p>See which sources are connected and what is still missing.</p>
                   </div>
-                  <span className="period-chip">{sourceCount}/4 read</span>
+                  <span className="period-chip">{sourceCount}/{sourceTotal} read</span>
                 </div>
                 <div className="source-grid">
                   {[

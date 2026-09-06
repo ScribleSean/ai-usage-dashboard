@@ -43,7 +43,8 @@ test('invalid activity fails rather than silently showing zero', () => {
 test('categories disclose no unknown app names', () => {
   assert.equal(category('secret-project-app'), 'Other');
   assert.equal(category('iTerm2'), 'Terminal');
-  assert.equal(category('ChatGPT'), 'Coding');
+  assert.equal(category('ChatGPT'), 'AI apps');
+  assert.equal(category('Code.exe'), 'Editors');
 });
 test('token adapter ignores paths, prices, prompts and unrelated fields', () => {
   const x = cleanTokens(

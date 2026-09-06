@@ -3,6 +3,8 @@ import { promisify } from 'node:util';
 import { readFile, writeFile, rename, mkdir, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { cleanIntervals, summarize } from './activity-timeline.mjs';
+import { estimate } from './api-estimate.mjs';
 const exec = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const fields = [
@@ -17,12 +19,13 @@ export function numeric(x) {
   return typeof x === 'number' && Number.isFinite(x) && x >= 0 ? x : null;
 }
 export function category(app) {
+  if (/codex|chatgpt|antigravity/i.test(app)) return 'AI apps';
   if (
     /codex|chatgpt|code\.exe|visual studio|cursor|antigravity|idea|pycharm/i.test(
       app,
     )
   )
-    return 'Coding';
+    return 'Editors';
   if (/terminal|powershell|cmd\.exe|conhost|wezterm|ubuntu|iterm/i.test(app))
     return 'Terminal';
   if (/chrome|firefox|msedge|brave|safari/i.test(app)) return 'Browser';
@@ -42,12 +45,19 @@ export function cleanTokens(raw, host) {
         date: d.date,
         ...Object.fromEntries(fields.map((k) => [k, numeric(d[k])])),
         models,
+        apiEstimate: estimate(models),
       };
     })
     .sort((a, b) => a.date.localeCompare(b.date));
   return { host, status: 'ok', days };
 }
 export function cleanActivity(raw, host) {
+  if (Array.isArray(raw.intervals)) {
+    const intervals = cleanIntervals(raw.intervals, raw.start, raw.end);
+    return { host, status: 'ok', start: raw.start, end: raw.end,
+      latestEvent: Number.isFinite(Date.parse(raw.latestEvent)) ? new Date(raw.latestEvent).toISOString() : null,
+      ...summarize(intervals, raw.start, raw.end), intervals };
+  }
   const categories = Object.fromEntries(
     ['Coding', 'Terminal', 'Browser', 'Other'].map((k) => [
       k,
@@ -100,20 +110,19 @@ async function macActivity() {
     a = choose('afkstatus'),
     end = new Date(),
     start = new Date(end - 7 * 86400000);
-  const q = `w = query_bucket(${JSON.stringify(w)}); a = query_bucket(${JSON.stringify(a)}); a = filter_keyvals(a, "status", ["not-afk"]); w = filter_period_intersect(w, a); RETURN = merge_events_by_keys(w, ["app"]);`;
+  const q = `w = query_bucket(${JSON.stringify(w)}); a = query_bucket(${JSON.stringify(a)}); a = filter_keyvals(a, "status", ["not-afk"]); RETURN = filter_period_intersect(w, a);`;
   const [events] = await api('/query/', {
     query: [q],
     timeperiods: [`${start.toISOString()}/${end.toISOString()}`],
   });
-  const categories = { Coding: 0, Terminal: 0, Browser: 0, Other: 0 };
-  for (const e of events) {
+  const intervals = events.map(e => {
     if (numeric(e.duration) === null) throw Error('Invalid duration');
-    categories[category(String(e.data?.app))] += e.duration;
-  }
+    return { start: e.timestamp, end: new Date(Date.parse(e.timestamp) + e.duration * 1000).toISOString(), category: category(String(e.data?.app)) };
+  });
   const latest = await api(`/buckets/${encodeURIComponent(w)}/events?limit=1`);
   return cleanActivity(
     {
-      categories,
+      intervals,
       start: start.toISOString(),
       end: end.toISOString(),
       latestEvent: latest[0]?.timestamp,
@@ -136,6 +145,7 @@ export function cleanReceipts(rows) {
       ? v.requestedModel
       : 'unknown',
     status: v.status === 'SUCCESS' ? 'completed' : 'failed',
+    failure: v.status !== 'SUCCESS' && /timeout/i.test(v.error || '') ? 'Response timed out. Cause not established.' : null,
     seconds: numeric(v.elapsedSeconds),
     recordedAt: new Date(modified).toISOString(),
     // Error snapshots often contain zeros that are not reliable usage accounting.
@@ -222,12 +232,20 @@ export async function collect() {
       });
     } catch {}
   }
+  const readable = [mac, windows].filter(x => x.status === 'ok' && x.intervals);
+  const combined = readable.length === 2 ? (() => {
+    const start = new Date(Math.max(...readable.map(x => Date.parse(x.start)))).toISOString();
+    const end = new Date(Math.min(...readable.map(x => Date.parse(x.end)))).toISOString();
+    const intervals = readable.flatMap(x => x.intervals).map(r => ({ ...r, start: Math.max(r.start, Date.parse(start)), end: Math.min(r.end, Date.parse(end)) })).filter(r => r.end > r.start);
+    return { host: 'Combined', status: 'ok', start, end, ...summarize(intervals, start, end) };
+  })() : { host: 'Combined', status: 'unavailable' };
   const data = {
-    schema: 1,
+    schema: 2,
     collectedAt: new Date().toISOString(),
     timezone: 'America/New_York',
-    activity: [mac, windows],
-    tokens: [macTokens, wslTokens],
+    activity: [mac, windows].map(({ intervals, ...safe }) => safe),
+    combined,
+    tokens: [macTokens, wslTokens, { host: 'Windows', status: 'not-connected' }],
     agents: cleanReceipts(rows),
     quota: { status: 'not-connected' },
   };

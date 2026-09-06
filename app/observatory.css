@@ -243,16 +243,29 @@ summary:focus-visible {
   margin-top: 18px;
 }
 .connected-buttons {
+  flex-direction: row !important;
   display: flex !important;
   gap: 3px !important;
   padding: 0 !important;
-  height: 48px !important;
+  height: auto !important;
+  min-height: 48px;
   background: transparent !important;
   width: fit-content !important;
 }
+.day-picker { display: grid; gap: 5px; font-size: 0.875rem; color: var(--m3-secondary); max-width: 175px; }
+.daily-timeline { margin: 16px 0 20px; }
+.hour-track { display: grid; grid-template-columns: repeat(24, minmax(0, 1fr)); gap: 3px; }
+.hour-track span { height: 14px; border-radius: 4px; background: var(--m3-primary); }
+.hour-labels { display: flex; justify-content: space-between; font-size: 0.75rem; margin-top: 6px; }
+.daily-timeline p, .source-caption { font-size: 0.875rem; color: var(--m3-secondary); }
+.daily-timeline p { margin: 6px 0 0; }
+.segment.ai-apps, .segment.editors, .segment.mixed-activity { background: var(--m3-primary); }
+.segment.editors { opacity: 0.65; }
+.segment.mixed-activity { opacity: 0.4; }
+.category-icon.ai-apps, .category-icon.editors, .category-icon.mixed-activity { background: var(--m3-high); color: var(--m3-primary); }
 .connected-buttons [data-slot='tabs-trigger'] {
   height: 48px !important;
-  min-width: 140px;
+  min-width: 0;
   padding: 0 17px !important;
   background: var(--m3-high) !important;
   border-radius: 5px !important;

@@ -13,7 +13,7 @@ The app runs on your computer. It does not send usage records to a hosted servic
 | Agents | The latest saved result from each recorded Antigravity conversation |
 | Sources | Which sources were read and which measurements are still missing |
 
-Choose a device within each view. Counts from different computers stay separate because their records may overlap.
+Activity offers a daily timeline and a combined Mac and Windows total. Overlapping intervals count once. Simultaneous activity in different categories is labeled mixed activity, since foreground records cannot establish which device had your attention. Token counts remain separate by host.
 
 This is an early prototype tested on one Mac, Windows and WSL setup. It does not yet track live subscription limits, every terminal command, iPhone activity or Gemini website usage. The Antigravity adapter currently reads four named receipt files from one configured directory.
 
@@ -48,17 +48,19 @@ Collection runs only when you ask for it. To stop the dashboard, press Ctrl-C in
 
 ## How to read the numbers
 
-ActivityWatch records foreground windows and away time. The dashboard groups active window time by app category. This does not measure attention or reliably distinguish human input from computer automation.
+ActivityWatch records foreground windows and away time. The dashboard separates AI apps, editors, terminals, browsers and other apps. Editor time may include AI assistance. These categories do not establish attention, manual coding time or productive output. Empty hours can mean inactivity or missing collector records.
 
 Codex counts come from ccusage reports. Cached tokens are included in the reported total, and reasoning tokens are part of output. These counts cannot tell you how much subscription allowance remains or how much money you spent.
 
 Antigravity receipts may contain cumulative conversation counters. The dashboard keeps the newest snapshot for each conversation instead of adding them together. A failed call shows unknown token usage. A returned response does not establish that its answer was correct.
 
-Dates in token reports use America/New_York. The history shows the latest seven recorded dates, which may have gaps. Activity uses a rolling seven-day window.
+Dates use America/New_York. Token history shows the latest seven recorded dates, which may have gaps. Activity is collected over a rolling seven-day window and displayed by calendar day. The first and current days may be partial. During daylight saving transitions, repeated clock hours share one chart cell, while totals retain elapsed duration.
+
+The small API comparison uses standard short-context rates from [OpenAI's price table](https://developers.openai.com/api/docs/pricing), checked September 6, 2026. It is a hypothetical token-price scenario, not a bill or subscription savings claim. Coverage excludes inferred model labels and unsupported models. Long-context premiums, Fast mode, tool charges and unreported cache writes are not included. Google and Anthropic receipt estimates are not connected yet.
 
 ## Data and security
 
-Window titles remain in ActivityWatch on their original machines. Windows reduces activity to broad categories before sending it over SSH. The dashboard stores aggregate counts in `public/local/usage.json`. It does not store raw titles, prompts, commands or credentials.
+Window titles remain in ActivityWatch on their original machines. Windows sends only timestamps and approved category labels over SSH. The collector uses those intervals in memory to remove overlap, then stores daily totals and hourly buckets in `public/local/usage.json`. Exact intervals, raw titles, prompts, commands and credentials are not stored in the dashboard snapshot.
 
 Git excludes personal configuration, snapshots and generated builds. A generated build may contain a copy of your snapshot, so do not upload it. Deleting the snapshot clears the dashboard without deleting the original tool records.
 
