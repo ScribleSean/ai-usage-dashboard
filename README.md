@@ -54,7 +54,7 @@ Open `http://127.0.0.1:5601` on the viewing computer. The host, local server and
 
 The current collector runs on macOS. It expects ActivityWatch on the Mac and Windows PC, ccusage on the Mac and Ubuntu, and working SSH aliases for Windows and Ubuntu.
 
-For native Windows tokens, optionally set `windowsCodexHome` to the Windows Codex directory as seen from WSL, such as `/mnt/c/Users/YOUR_USER/.codex`. The installed Ubuntu reader processes those logs separately from Ubuntu logs. Only aggregate reports return to the dashboard. This uses ccusage's documented [Codex data directory override](https://github.com/ccusage/ccusage/blob/main/docs/guide/codex/index.md). Host reports remain separate because mirrored sessions may overlap.
+For native Windows tokens, optionally set `windowsCodexHome` to the Windows Codex directory as seen from WSL, such as `/mnt/c/Users/YOUR_USER/.codex`. The installed Ubuntu reader processes those logs separately from Ubuntu logs. Only aggregate reports return to the dashboard. This uses ccusage's documented [Codex data directory override](https://github.com/ccusage/ccusage/blob/main/docs/guide/codex/index.md). Host reports stay individually available. All requires a successful cross-host overlap check.
 
 Copy `local.config.example.json` to `local.config.json`. Set the executable paths, SSH aliases and receipt directory for your machines. Keep credentials in your existing SSH and provider settings.
 
@@ -64,9 +64,9 @@ The settings and local-model adapters use Python 3.9 or later on the reader's ma
 npm run collect
 ```
 
-The collector replaces the dashboard snapshot. Choose **Reload snapshot** in the app to display it. You do not need to rebuild after collecting new records.
+The collector replaces the dashboard snapshot atomically. The page checks for a newer snapshot every 30 seconds while visible, and when it becomes visible again. **Reload snapshot** checks immediately. None of these browser actions starts collection or model tasks. You do not need to rebuild after collecting new records.
 
-Collection runs only when you ask for it. To stop the dashboard, press Ctrl-C in its terminal. ActivityWatch continues recording independently.
+Collection is manual by default. The optional [login collector](docs/STARTUP.md) runs every five minutes while the hosting Mac is awake and logged in. An operating-system file lock prevents overlapping runs. Each run has a four-minute limit. Stale timestamps and unsuccessful attempts are visible in the dashboard. ActivityWatch continues recording independently.
 
 ## How to read the numbers
 

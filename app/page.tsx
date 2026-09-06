@@ -1,7 +1,8 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { settingsCoverage } from '../scripts/settings-coverage.mjs';
 import { estimate } from '../scripts/api-estimate.mjs';
+import { freshness } from '../scripts/freshness.mjs';
 import {
   Activity,
   Layers3,
@@ -46,6 +47,7 @@ type Tokens = {
 type ActivityRow = {
   host: string;
   status: string;
+  checkedAt?: string;
   categories?: Record<string, number>;
   latestEvent?: string;
   start?: string;
@@ -63,17 +65,18 @@ type Agent = {
 };
 type Report = {
   quota?: {status:string;checkedAt?:string;windows?:{bucket:string;window:string;remainingPercent:number;durationMinutes:number|null;resetsAt:string|null}[]};
-  localModel?: {status:string;records?:{model:string;status:string;recordedAt:string|null;seconds:number|null;input:number|null;cached:number|null;output:number|null;ttft:number|null;peakGpuMiB:number|null}[]};
-  settings?: {host:string;status:string;snapshotStable?:boolean;profiles?:{date:string;model:string;effort:string;speed:string;totalTokens:number;inputTokens:number;cacheReadTokens:number;cacheCreationTokens:number;outputTokens:number}[];tools?:{date:string;category:string;count:number}[]}[];
+  localModel?: {status:string;checkedAt?:string;records?:{model:string;status:string;recordedAt:string|null;seconds:number|null;input:number|null;cached:number|null;output:number|null;ttft:number|null;peakGpuMiB:number|null}[]};
+  settings?: {host:string;status:string;checkedAt?:string;snapshotStable?:boolean;profiles?:{date:string;model:string;effort:string;speed:string;totalTokens:number;inputTokens:number;cacheReadTokens:number;cacheCreationTokens:number;outputTokens:number}[];tools?:{date:string;category:string;count:number}[]}[];
   combinedTokens?: {host:string;status:string;days?:Tokens[];verification?:{status:string}};
   combinedSettings?: NonNullable<Report['settings']>[number];
   combined?: ActivityRow;
   demo?: boolean;
   collectedAt: string;
   activity: ActivityRow[];
-  tokens: { host: string; status: string; days?: Tokens[] }[];
+  tokens: { host: string; status: string; checkedAt?:string; days?: Tokens[] }[];
   agents: Agent[];
 };
+type Collector = {state:'running'|'ok'|'partial'|'failed';startedAt:string;finishedAt?:string|null;intervalSeconds:number;maxRunSeconds:number};
 const fmt = (n: number | null | undefined) =>
   n == null ? 'Unknown' : new Intl.NumberFormat('en-US').format(n);
 const compact = (n: number) =>
@@ -141,6 +144,9 @@ export default function Home() {
   const [data, setData] = useState<Report | null>(null),
     [error, setError] = useState(false),
     [loading, setLoading] = useState(true);
+  const [collector,setCollector] = useState<Collector|null>(null);
+  const [now,setNow] = useState(0);
+  const inFlight = useRef(false);
   const [view, setView] = useState('activity'),
     [host, setHost] = useState('Combined'),
     [selectedDate, setSelectedDate] = useState(''),
@@ -148,25 +154,33 @@ export default function Home() {
     [tokenHost, setTokenHost] = useState('All'),
     [tokenDate, setTokenDate] = useState(''),
     [mobile, setMobile] = useState(false);
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(false);
+  const load = useCallback(async (silent=false) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    if (!silent) setLoading(true);
     try {
-      const r = await fetch('/local/usage.json', { cache: 'no-store' });
+      const [r,status] = await Promise.all([
+        fetch('/local/usage.json', { cache: 'no-store', signal:AbortSignal.timeout(10000) }),
+        fetch('/local/collector.json', { cache: 'no-store', signal:AbortSignal.timeout(10000) }).then(async r=>r.ok?await r.json() as Collector:null).catch(()=>null),
+      ]);
       if (!r.ok) throw Error();
       const v = (await r.json()) as Report;
       if (
         !v ||
         !Array.isArray(v.activity) ||
         !Array.isArray(v.tokens) ||
-        !Array.isArray(v.agents)
+        !Array.isArray(v.agents) || !Number.isFinite(Date.parse(v.collectedAt))
       )
         throw Error();
-      setData(v);
+      setData(previous=>previous && Date.parse(previous.collectedAt)>=Date.parse(v.collectedAt)?previous:v);
+      setCollector(status && ['running','ok','partial','failed'].includes(status.state) && Number.isFinite(Date.parse(status.startedAt)) && [0,300].includes(status.intervalSeconds) && status.maxRunSeconds===240 ? status : null);
+      setError(false);
     } catch {
       setError(true);
     } finally {
       setLoading(false);
+      setNow(Date.now());
+      inFlight.current = false;
     }
   }, []);
   useEffect(() => {
@@ -177,7 +191,17 @@ export default function Home() {
     setMobile(q.matches);
     const changed = () => setMobile(q.matches);
     q.addEventListener('change', changed);
-    return () => q.removeEventListener('change', changed);
+    const refresh = () => {
+      setNow(Date.now());
+      if (document.visibilityState==='visible') void load(true);
+    };
+    const timer = setInterval(refresh,30000);
+    document.addEventListener('visibilitychange',refresh);
+    return () => {
+      q.removeEventListener('change', changed);
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange',refresh);
+    };
   }, [load]);
   const activitySources = data ? [...(data.combined ? [data.combined] : []), ...data.activity] : [];
   const current = activitySources.find((a) => a.host === host) || activitySources[0];
@@ -206,15 +230,18 @@ export default function Home() {
     latest = days.find(d => d.date === tokenDate) || days.at(-1);
   const sourceRows = data ? [
     ...data.activity.map(a=>({...a,kind:'ActivityWatch'})), ...data.tokens.map(t=>({...t,kind:'Codex logs'})),
-    ...(data.quota?[{host:'Codex account',kind:'Limits snapshot',status:data.quota.status}]:[]),
-    ...(data.localModel?[{host:'Ubuntu',kind:'Local model receipts',status:data.localModel.status}]:[]),
-    ...(data.settings||[]).map(s=>({host:s.host,kind:'Settings & tool metadata',status:s.status}))
+    ...(data.quota?[{host:'Codex account',kind:'Limits snapshot',status:data.quota.status,checkedAt:data.quota.checkedAt}]:[]),
+    ...(data.localModel?[{host:'Ubuntu',kind:'Local model receipts',status:data.localModel.status,checkedAt:data.localModel.checkedAt}]:[]),
+    ...(data.settings||[]).map(s=>({host:s.host,kind:'Settings & tool metadata',status:s.status,checkedAt:s.checkedAt}))
   ] : [];
   const sourceCount=sourceRows.filter(x=>x.status==='ok').length;
   const sourceTotal=sourceRows.length;
   const settingsSource=tokenHost==='All'?data?.combinedSettings:data?.settings?.find(s=>s.host===tokenHost);
   const localRecords=data?.localModel?.records || [];
   const providerWindows=data?.quota?.windows || [];
+  const snapshotAge=freshness(data?.collectedAt,now || Date.now());
+  const collectorAge=freshness(collector?.startedAt,now || Date.now(),collector?.maxRunSeconds || 240);
+  const collectorRunning=collector?.state==='running' && collectorAge.state==='recent';
   return (
     <div className="app-shell">
       <header className="app-bar">
@@ -237,7 +264,7 @@ export default function Home() {
             aria-label={loading ? 'Loading snapshot' : 'Reload snapshot'}
             onClick={() => void load()}
             disabled={loading}
-            title="Reload the saved snapshot. To collect new records, run npm run collect."
+            title="Check for a newer saved snapshot. This page also checks automatically while visible."
           >
             <RefreshCw size={18} />
             <span>{loading ? 'Loading' : 'Reload snapshot'}</span>
@@ -274,16 +301,15 @@ export default function Home() {
         <main className="workspace-body">
           <div className="context-line">
             <span>WORKSPACE USAGE</span>
-            <span>
+            <span className={snapshotAge.state==='stale'?'snapshot-stale':''} title={data?new Date(data.collectedAt).toLocaleString():undefined}>
               {data
-                ? 'Snapshot · ' +
-                  new Date(data.collectedAt).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })
+                ? 'Collected ' + snapshotAge.label
                 : 'Waiting for snapshot'}
             </span>
           </div>
+          {data && !error && (snapshotAge.state==='stale' || collector?.state==='failed' || (collector?.state==='running' && !collectorRunning)) && <p className="error-banner" role="status">
+            {collector?.state==='failed'?'The last collection failed. Showing the most recent saved snapshot.':collector?.state==='running'&&!collectorRunning?'Collection has not reported completion. The saved snapshot may be out of date.':'This snapshot is over 10 minutes old. The collector may be stopped or the hosting Mac asleep.'}
+          </p>}
           {error && (
             <p className="error-banner" role="alert">
               Could not reload.{' '}
@@ -761,15 +787,16 @@ export default function Home() {
                       <div>
                         <h2>{s.host}</h2>
                         <p>{s.kind}</p>
+                        <small className="source-age">{s.checkedAt?'Checked '+freshness(s.checkedAt,now || Date.now()).label:'Check time unavailable'}</small>
                       </div>
                       <span
                         className={
-                          'run-state ' + (s.status === 'ok' ? '' : 'warn')
+                          'run-state ' + (s.status === 'ok' && freshness(s.checkedAt,now || Date.now()).state!=='stale' ? '' : 'warn')
                         }
                       >
                         {s.status === 'ok' ? (
                           <>
-                            <Check size={15} /> Read
+                            <Check size={15} /> {freshness(s.checkedAt,now || Date.now()).state==='stale'?'Read · stale':'Read'}
                           </>
                         ) : (
                           'Unavailable'
@@ -778,6 +805,12 @@ export default function Home() {
                     </div>
                   ))}
                 </div>
+                <section className="collection-panel" aria-label="Background collection">
+                  <h2>Background collection</h2>
+                  <p>{collector?.intervalSeconds===300?'Expected every 5 minutes while the hosting Mac is awake and logged in.':'No recent scheduled-run status. Manual collection is available with npm run collect.'}</p>
+                  {collector && <div className="collection-status"><span className={'run-state '+(collector.state==='failed'||collector.state==='partial'?'warn':'')}>{collectorRunning?'Collecting saved records':collector.state==='running'?'Completion overdue':collector.state==='ok'?'Last run complete':collector.state==='partial'?'Some sources unavailable':'Last run failed'}</span><span>{collector.finishedAt?'Finished '+freshness(collector.finishedAt,now || Date.now()).label:'Started '+collectorAge.label}</span></div>}
+                  <p>The page checks for a newer snapshot every 30 seconds while visible. Browsing the dashboard does not launch collection or model tasks.</p>
+                </section>
                 <section className="coverage-panel">
                   <h2>Coverage still missing</h2>
                   <div className="coverage-tags">
@@ -798,9 +831,7 @@ export default function Home() {
                 <details className="method-note">
                   <summary>Refresh & privacy</summary>
                   <p>
-                    Run <code>npm run collect</code> in this application, then
-                    choose Reload snapshot. Refreshing is on demand; no
-                    scheduler is installed. Personal config and data are
+                    Manual collection uses <code>npm run collect</code>. An optional login job collects every five minutes. Overlapping runs are skipped, and a run is limited to four minutes. The page retains its last snapshot if a reload fails. Personal config and data are
                     excluded from the public repo. Raw titles, prompts, commands
                     and credentials are never stored here.
                   </p>

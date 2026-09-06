@@ -364,6 +364,12 @@ summary:focus-visible {
 .hour-track span { height: 14px; border-radius: 4px; background: var(--m3-primary); }
 .hour-labels { display: flex; justify-content: space-between; font-size: 0.75rem; margin-top: 6px; }
 .daily-timeline p, .source-caption { font-size: 0.875rem; color: var(--m3-secondary); }
+.snapshot-stale { color: var(--status-warn-ink); }
+.source-age { display: block; margin-top: 5px; font-size: 0.75rem; color: var(--m3-secondary); }
+.collection-panel { background: var(--m3-low); border-radius: 20px; padding: 20px; margin: 20px 0; }
+.collection-panel h2 { font-size: 1rem; margin: 0 0 10px; }
+.collection-panel p { color: var(--m3-secondary); font-size: 0.875rem; margin: 8px 0; }
+.collection-status { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 16px 0; font-size: 0.875rem; }
 .daily-timeline p { margin: 6px 0 0; }
 .segment.ai-apps, .segment.editors, .segment.mixed-activity { background: var(--m3-primary); }
 .segment.editors { opacity: 0.65; }

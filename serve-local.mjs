@@ -35,8 +35,8 @@ const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost:5601');
     let file;
-    if (url.pathname === '/local/usage.json')
-      file = path.join(root, 'public/local/usage.json');
+    if (['/local/usage.json', '/local/collector.json'].includes(url.pathname))
+      file = path.join(root, 'public', url.pathname.slice(1));
     else {
       const requested = decodeURIComponent(url.pathname);
       file = await realpath(

@@ -1,6 +1,6 @@
 # Source coverage
 
-The dashboard reads several kinds of records. A successful read means that adapter returned data, not that every activity or model call has been captured.
+The dashboard reads several kinds of records. A successful read means that adapter returned data, not that every activity or model call has been captured. Per-source check times measure the read, not the latest user activity. Snapshot ages update while the page is open. A stale snapshot is not presented as a current read.
 
 | Source | What it measures | Important limit |
 | --- | --- | --- |

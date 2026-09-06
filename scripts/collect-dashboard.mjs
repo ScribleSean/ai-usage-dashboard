@@ -173,9 +173,9 @@ export function cleanReceipts(rows) {
 }
 async function guarded(host, fn) {
   try {
-    return await fn();
+    return {...await fn(), checkedAt:new Date().toISOString()};
   } catch {
-    return { host, status: 'unavailable' };
+    return { host, status: 'unavailable', checkedAt:new Date().toISOString() };
   }
 }
 export async function collect() {
