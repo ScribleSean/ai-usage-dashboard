@@ -3,13 +3,14 @@ import { promisify } from 'node:util';
 import { readFile, writeFile, rename, mkdir, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { cleanIntervals, summarize, appLabel } from './activity-timeline.mjs';
+import { cleanIntervals, summarizeTracked, appLabel } from './activity-timeline.mjs';
 import { estimate } from './api-estimate.mjs';
 import { readQuota } from './read-quota.mjs';
 import { pythonReport } from './python-report.mjs';
 import { readSettingsSnapshot } from './settings-snapshot.mjs';
 import { combineTokens, combineSettings } from './combine-tokens.mjs';
 import { randomBytes } from 'node:crypto';
+import { powershellCommand } from './powershell-command.mjs';
 const exec = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const fields = [
@@ -70,9 +71,10 @@ export function cleanTokens(raw, host) {
 export function cleanActivity(raw, host) {
   if (Array.isArray(raw.intervals)) {
     const intervals = cleanIntervals(raw.intervals, raw.start, raw.end);
+    const trackingIntervals = Array.isArray(raw.trackingIntervals) ? cleanIntervals(raw.trackingIntervals.map(r=>({start:r.start,end:r.end,category:'Other'})),raw.start,raw.end) : undefined;
     return { host, status: 'ok', start: raw.start, end: raw.end,
       latestEvent: Number.isFinite(Date.parse(raw.latestEvent)) ? new Date(raw.latestEvent).toISOString() : null,
-      ...summarize(intervals, raw.start, raw.end), intervals };
+      ...summarizeTracked(intervals, trackingIntervals, raw.start, raw.end), intervals, trackingIntervals };
   }
   const categories = Object.fromEntries(
     ['Coding', 'Terminal', 'Browser', 'Other'].map((k) => [
@@ -135,10 +137,19 @@ async function macActivity() {
     if (numeric(e.duration) === null) throw Error('Invalid duration');
     return { start: e.timestamp, end: new Date(Date.parse(e.timestamp) + e.duration * 1000).toISOString(), category: category(String(e.data?.app)), app:appLabel(e.data?.app) };
   });
+  const [observed] = await api('/query/', {
+    query:[`w = query_bucket(${JSON.stringify(w)}); a = query_bucket(${JSON.stringify(a)}); RETURN = filter_period_intersect(w, a);`],
+    timeperiods:[`${start.toISOString()}/${end.toISOString()}`],
+  });
+  const trackingIntervals = observed.map(e=>{
+    if (numeric(e.duration)===null) throw Error('Invalid tracking duration');
+    return {start:e.timestamp,end:new Date(Date.parse(e.timestamp)+e.duration*1000).toISOString()};
+  });
   const latest = await api(`/buckets/${encodeURIComponent(w)}/events?limit=1`);
   return cleanActivity(
     {
       intervals,
+      trackingIntervals,
       start: start.toISOString(),
       end: end.toISOString(),
       latestEvent: latest[0]?.timestamp,
@@ -216,8 +227,7 @@ export async function collect() {
           '-oBatchMode=yes',
           '-oConnectTimeout=8',
           config.windowsHost,
-          'powershell.exe -NoProfile -NonInteractive -EncodedCommand ' +
-            Buffer.from(ps, 'utf16le').toString('base64'),
+          powershellCommand(ps),
         ]),
         'Windows',
       ),
@@ -268,14 +278,15 @@ export async function collect() {
     const start = new Date(Math.max(...readable.map(x => Date.parse(x.start)))).toISOString();
     const end = new Date(Math.min(...readable.map(x => Date.parse(x.end)))).toISOString();
     const intervals = readable.flatMap(x => x.intervals).map(r => ({ ...r, start: Math.max(r.start, Date.parse(start)), end: Math.min(r.end, Date.parse(end)) })).filter(r => r.end > r.start);
-    return { host: 'Combined', status: 'ok', start, end, ...summarize(intervals, start, end) };
+    const tracking = readable.every(x=>Array.isArray(x.trackingIntervals)) ? readable.flatMap(x=>x.trackingIntervals).map(r=>({...r,start:Math.max(r.start,Date.parse(start)),end:Math.min(r.end,Date.parse(end))})).filter(r=>r.end>r.start) : undefined;
+    return { host: 'Combined', status: 'ok', start, end, ...summarizeTracked(intervals, tracking, start, end) };
   })() : { host: 'Combined', status: 'unavailable' };
   const combinedTokens = combineTokens(tokenSources,inventories);
   const data = {
     schema: 2,
     collectedAt: new Date().toISOString(),
     timezone: 'America/New_York',
-    activity: [mac, windows].map(({ intervals, ...safe }) => safe),
+    activity: [mac, windows].map(({ intervals, trackingIntervals, ...safe }) => safe),
     combined,
     tokens: tokenSources,
     combinedTokens,

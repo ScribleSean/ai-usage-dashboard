@@ -67,3 +67,26 @@ export function summarize(rows, start, end) {
   for (const d of days.values()) for (const [k, v] of Object.entries(d.categories)) totals[k] = (totals[k] || 0) + v;
   return { categories: totals, days: [...days.values()].sort((a, b) => a.date.localeCompare(b.date)) };
 }
+
+export function summarizeTracked(rows, tracking, start, end) {
+  const result = summarize(rows,start,end);
+  if (!Array.isArray(tracking)) return result;
+  // Include idle intervals and deduplicate overlapping tracking evidence.
+  const observed = summarize([...tracking,...rows].map(r=>({...r,category:'Other',app:'Unknown app'})),start,end);
+  result.days = result.days.map(day=>{
+    const coverage=observed.days.find(d=>d.date===day.date);
+    return {...day,trackedSeconds:coverage?.seconds || 0,trackedHours:coverage?.hours || Array(24).fill(0)};
+  });
+  return result;
+}
+export function trackingState(record) {
+  if (!record) return 'untracked';
+  if (record.seconds>0 || record.trackedSeconds>0) return 'tracked';
+  return record.trackedSeconds===0?'untracked':'unknown';
+}
+export function threeHourBands(record) {
+  return Array.from({length:8},(_,i)=>({hour:i*3,
+    seconds:(record?.hours || []).slice(i*3,i*3+3).reduce((n,v)=>n+v,0),
+    trackedSeconds:record?.trackedHours?(record.trackedHours.slice(i*3,i*3+3).reduce((n,v)=>n+v,0)):null,
+  }));
+}

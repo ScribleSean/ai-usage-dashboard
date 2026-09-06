@@ -279,7 +279,7 @@ summary:focus-visible {
 .date-navigation { display: grid; grid-template-columns: 36px minmax(0,1fr) 36px; gap: 4px; width: 100%; align-items: center; }
 .date-navigation > span { text-align: center; font-size: 0.875rem; font-weight: 600; }
 .date-navigation button { padding: 0 !important; min-width: 0; width: 36px; height: 36px; border-radius: 50%; }
-.weekly-timeline { margin: 20px 0 28px; padding: 20px; background: var(--m3-low); border-radius: 24px; --week-label: 72px; --week-total: 56px; }
+.weekly-timeline { margin: 16px 0 20px; padding: 12px; background: var(--m3-low); border-radius: 18px; --week-label: 64px; --week-total: 58px; }
 .week-timeline-heading { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; margin-bottom: 18px; }
 .week-timeline-heading h2 { font-size: 1rem; font-weight: 600; margin: 0; }
 .week-timeline-heading > span { font-size: 0.875rem; color: var(--m3-secondary); }
@@ -294,6 +294,22 @@ summary:focus-visible {
 .week-hours i { display: block; width: 100%; height: 100%; background: var(--m3-primary); }
 .week-hours .outside-window { background: repeating-linear-gradient(135deg,transparent 0 3px,var(--m3-high) 3px 5px); }
 .week-total { text-align: right; font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+.week-row { display: grid; grid-template-columns: var(--week-label) minmax(0,1fr) var(--week-total); gap: 10px; align-items: center; min-height: 34px; border-radius: 8px; }
+.week-row:hover { background: var(--m3-high); }
+.week-row .week-date { height: auto !important; min-height: 32px; padding: 2px 0 !important; align-items: flex-start; gap: 0; }
+.week-row .week-date:disabled { opacity: 1; color: var(--m3-secondary); }
+.week-untracked { color: var(--m3-secondary); }
+.week-bands { display: grid; grid-template-columns: repeat(8,minmax(0,1fr)); gap: 1px; }
+.week-band { height: 28px !important; min-width: 0; padding: 0 !important; border-radius: 4px; }
+.week-band > span { display: block; width: 100%; height: 5px; background: var(--m3-outline); border-radius: 2px; overflow: hidden; }
+.week-band i { display: block; height: 100%; background: var(--m3-primary); }
+.week-band > .band-untracked { height: 2px; background: var(--m3-high); }
+.week-band[data-highlight] { background: var(--m3-high); }
+.week-band:hover > span, .week-band:focus-visible > span, .week-band[aria-pressed='true'] > span { height: 9px; }
+.week-no-history { display: flex; gap: 8px; align-items: center; font-size: 0.75rem; color: var(--m3-secondary); }
+.week-no-history::after { content: ''; flex: 1; border-top: 1px dashed var(--m3-outline); }
+.week-band-detail { display: flex; flex-wrap: wrap; align-content: center; gap: 2px 12px; min-height: 42px; margin-top: 8px; font-size: 0.875rem; color: var(--m3-secondary); }
+.week-band-detail strong { font-weight: 500; color: var(--m3-ink); }
 .week-legend { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 15px; font-size: 0.75rem; color: var(--m3-secondary); }
 .week-legend > span:last-child { display: flex; gap: 4px; align-items: center; }
 .week-legend i { width: 12px; height: 12px; border-radius: 3px; background: var(--m3-primary); }
@@ -307,7 +323,8 @@ summary:focus-visible {
 .host-contribution > i > i { display: block; height: 100%; background: var(--m3-primary); }
 .host-contributions > p { font-size: 0.875rem; color: var(--m3-secondary); }
 @media (max-width: 700px) {
-  .weekly-timeline { padding: 16px 10px; --week-label: 46px; --week-total: 40px; }
+  .weekly-timeline { padding: 10px 0; --week-label: 46px; --week-total: 48px; }
+  .week-row { gap: 6px; }
   .week-day { gap: 6px !important; }
   .week-hours { gap: 2px; }
   .week-hours > span { height: 32px; border-radius: 2px; }

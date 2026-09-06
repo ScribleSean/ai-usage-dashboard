@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { settingsCoverage } from '../scripts/settings-coverage.mjs';
 import { estimate } from '../scripts/api-estimate.mjs';
 import { freshness } from '../scripts/freshness.mjs';
+import WeekTimeline from './week-timeline';
 import {
   Activity,
   Layers3,
@@ -52,7 +53,7 @@ type ActivityRow = {
   latestEvent?: string;
   start?: string;
   end?: string;
-  days?: { date: string; seconds: number; hours: number[]; categories: Record<string, number>; apps?:Record<string,Record<string,number>> }[];
+  days?: { date: string; seconds: number; hours: number[]; trackedSeconds?:number;trackedHours?:number[];categories: Record<string, number>; apps?:Record<string,Record<string,number>> }[];
 };
 type Agent = {
   failure?: string | null;
@@ -373,20 +374,7 @@ export default function Home() {
                     ))}
                   </TabsList>
                 <TabsContent value={host}>
-                {period === 'week' && <section className="weekly-timeline" aria-label="Recorded activity over seven days">
-                  <div className="week-timeline-heading"><h2>Your week, hour by hour</h2><span>New York time</span></div>
-                  <div className="week-time-axis" aria-hidden="true"><div><span>12 AM</span><span>6 AM</span><span>Noon</span><span>6 PM</span><span>12 AM</span></div></div>
-                  {weekDays.map(({date,record}) => <Button key={date} variant="ghost" className="week-day" aria-label={`${date}: ${record ? Math.round(record.seconds / 60) + ' recorded minutes' : 'outside collected window'}. Open day.`} disabled={!record} onClick={() => {setSelectedDate(date);setPeriod('day');window.scrollTo(0,0);}}>
-                    <span className="week-date"><strong>{new Date(date+'T12:00:00Z').toLocaleDateString('en-US',{weekday:'short',timeZone:'UTC'})}</strong><small>{dateLabel(date)}</small></span>
-                    <span className="week-hours" aria-hidden="true">{Array.from({length:24},(_,hour)=>{
-                      const n=record?.hours[hour] || 0;
-                      return <span key={hour} className={!record?'outside-window':n?'has-activity':''} title={`${date}, ${hour}:00: ${record?Math.round(n/60)+' recorded minutes':'outside collected window'}`}><i style={{opacity:n?0.25+0.75*Math.min(1,n/3600):0}}/></span>;
-                    })}</span>
-                    <span className="week-total">{record ? `${(record.seconds/3600).toFixed(1)}h` : 'Unknown'}</span>
-                  </Button>)}
-                  <div className="week-legend"><span>Each cell is one hour. Select a day for detail.</span><span>Less <i style={{opacity:0.3}}/><i style={{opacity:0.65}}/><i/> More</span></div>
-                  <p>Stronger color means more recorded active minutes. Empty cells can mean idle time or missing history. Coverage may be partial.</p>
-                </section>}
+                {period === 'week' && <WeekTimeline key={host} days={weekDays} onOpenDay={date=>{setSelectedDate(date);setPeriod('day');window.scrollTo(0,0);}}/>}
                 {period === 'day' && dailyActivity && <section className="daily-timeline" aria-label="Recorded activity by hour">
                   <div className="hour-track">{dailyActivity.hours.map((n, hour) => <span key={hour}
                     style={{ opacity: n ? 0.25 + 0.75 * Math.min(1, n / 3600) : 0.08 }}

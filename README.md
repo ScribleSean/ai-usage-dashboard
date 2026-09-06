@@ -19,7 +19,7 @@ This is an early prototype tested on one Mac, Windows and WSL setup. Optional ad
 
 ## Try the demo
 
-Activity opens in Day view with previous/next controls. Week shows seven dated rows ending on the selected date, with hourly activity and daily totals. Select a row to open that day. Navigation stops at the available collected window.
+Activity opens in Day view with previous/next controls. Week shows seven dated rows ending on the selected date, with three-hour bands and daily totals. Hover or select a band for details. Select a date to open that day. Missing tracking records are muted, distinct from recorded idle time. Navigation stops at the available collected window.
 
 Tokens shows model-level counts and shares. Expand a model for its token categories and supported API-equivalent estimate. The recorded-day selector lets you review older days. [Research notes](docs/USAGE-TRACKING-REFERENCES.md) describe the open-source patterns behind the accounting.
 

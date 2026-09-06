@@ -33,7 +33,7 @@ Shared identifiers, cross-host parent relationships or a shared parent block the
 
 ## Weekly activity timeline
 
-Week shows seven dated rows and 24 hour cells per row. Color intensity represents recorded active minutes in that hour, while the row end shows the day's total. Selecting a row opens its day view. Empty cells can mean idle time or missing history, not proof of inactivity. Days outside the collected window are marked separately. Repeated daylight-saving hours share a cell, while the recorded duration remains unchanged.
+Week shows seven dated rows with eight slim three-hour bands per row. Hover or focus highlights the same time band across days. Select a band to retain its active and tracked duration below the chart, or select a date to open Day. Missing tracking records are muted and do not display a zero activity total. A tracked interval with no active time can display zero. Tracking coverage comes from intersecting window and away-status records, including idle records. It does not establish full-day coverage. Repeated daylight-saving hours share a band, while totals retain elapsed duration.
 
 Model rows show a standard short-context API comparison and its share of the priced subtotal, not a share of the subscription bill. Expanded settings rows can apply the published Fast-mode rates where the tier was recorded. Reasoning tokens remain part of output. Long-context pricing, tools, regional adjustments and unreported cache writes are excluded. Rates were checked against [OpenAI pricing](https://developers.openai.com/api/docs/pricing) on September 6, 2026.
 

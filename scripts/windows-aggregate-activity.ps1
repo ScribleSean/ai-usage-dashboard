@@ -36,5 +36,14 @@ $intervals = @(foreach ($event in $result[0]) {
   $eventStart = [DateTimeOffset]::Parse($event.timestamp)
   [pscustomobject]@{start=$eventStart.ToString('o');end=$eventStart.AddSeconds($duration).ToString('o');category=$category;app=$label}
 })
+$trackingQuery = "w = query_bucket($w); a = query_bucket($a); RETURN = filter_period_intersect(w, a);"
+$trackingBody = @{query=@($trackingQuery);timeperiods=@(($start.ToString('o') + '/' + $end.ToString('o')))} | ConvertTo-Json -Compress
+$observed = Invoke-RestMethod -Method Post -Uri "$base/query/" -Body $trackingBody -ContentType 'application/json' -TimeoutSec 30
+$trackingIntervals = @(foreach ($event in $observed[0]) {
+  $duration = [double]$event.duration
+  if ([double]::IsNaN($duration) -or [double]::IsInfinity($duration) -or $duration -lt 0) { throw 'Invalid duration' }
+  $eventStart = [DateTimeOffset]::Parse($event.timestamp)
+  [pscustomobject]@{start=$eventStart.ToString('o');end=$eventStart.AddSeconds($duration).ToString('o')}
+})
 $latest = Invoke-RestMethod -Uri "$base/buckets/$([Uri]::EscapeDataString($windows[0].Name))/events?limit=1" -TimeoutSec 10
-[pscustomobject]@{host='Windows';status='ok';start=$start.ToString('o');end=$end.ToString('o');latestEvent=$latest[0].timestamp;intervals=$intervals} | ConvertTo-Json -Compress -Depth 5
+[pscustomobject]@{host='Windows';status='ok';start=$start.ToString('o');end=$end.ToString('o');latestEvent=$latest[0].timestamp;intervals=$intervals;trackingIntervals=$trackingIntervals} | ConvertTo-Json -Compress -Depth 5
