@@ -1,45 +1,85 @@
-# AI Usage Dashboard
+# AI usage dashboard
 
-Open-source, local-only observability for a Mac/Windows/Ubuntu AI workspace. Public code; private data. No access to the author's personal context repository is needed.
+A dashboard for tracking app activity and AI usage across a Mac and a Windows PC. It reads existing records from ActivityWatch, Codex and a small set of Antigravity agent runs.
 
-**Status: early working prototype.** Tested on one Mac/Windows/WSL setup. Not a universal quota meter, productivity score or production analytics service. Responsive layout and keyboard-native controls are implemented; formal accessibility and browser-interaction testing remain future work.
+The app runs on your computer. It does not send usage records to a hosted service or make model requests.
 
-## Try without accounts
+## What you can see
 
-Run `npm ci`, `npm run demo`, `npm run build`, then `npm run serve:local`. The demo is visibly labeled synthetic and refuses to overwrite personal data. No model, ActivityWatch or SSH connection is needed.
+| View | Records |
+| --- | --- |
+| Activity | Time spent in broad app categories on Mac and Windows, excluding away time |
+| Tokens | Daily Codex token counts from Mac and Ubuntu, including cached input |
+| Agents | The latest saved result from each recorded Antigravity conversation |
+| Sources | Which sources were read and which measurements are still missing |
 
-## Run
+Choose a device within each view. Counts from different computers stay separate because their records may overlap.
 
-Requires Node 22.13+, existing ActivityWatch on Mac/Windows, existing ccusage on Mac/Ubuntu, and working SSH aliases. No model calls or paid APIs.
+This is an early prototype tested on one Mac, Windows and WSL setup. It does not yet track live subscription limits, every terminal command, iPhone activity or Gemini website usage. The Antigravity adapter currently reads four named receipt files from one configured directory.
 
-1. `npm ci` (for a fresh checkout).
-2. Create ignored `local.config.json` from the example using your installed executables and SSH aliases. Do not put credentials in it.
-3. `npm run collect` refreshes sanitized source snapshots, with bounded network/SSH calls.
-4. `npm run build` exports the static interface.
-5. `npm run serve:local` opens the loopback-only server at http://127.0.0.1:5601. Open that URL on the Mac.
+## Try the demo
 
-To refresh later, run `npm run collect` and reload the page. No rebuild is needed for fresh data. Ask the coordinating agent to do this remotely if preferred. Collection is on demand, not scheduled. Stop the dashboard with Ctrl-C in its terminal; ActivityWatch continues independently.
+You need Node.js 22.13 or later.
 
-## Three distinct views
+```sh
+git clone https://github.com/ScribleSean/ai-usage-dashboard.git
+cd ai-usage-dashboard
+npm ci
+npm run demo
+npm run build
+npm run serve:local
+```
 
-- Foreground activity: rolling seven days of window time intersected with non-AFK intervals. Broad app categories only; no cross-device sum or claim of attention/human input.
-- AI tokens: Mac and Ubuntu Codex daily reports, latest seven recorded dates, with cache/input/output breakdowns and inferred model labels. No cross-host sum until mirrored session deduplication is proven. No price estimates or quota inference.
-- Agent work: fixed, existing Antigravity receipts; one newest snapshot per conversation, failure usage unknown. Duration is the latest call, not cumulative conversation time. Successful execution does not imply verified answer quality.
+Open [localhost:5601](http://127.0.0.1:5601). The demo uses made-up records and labels them as sample data. It refuses to overwrite an existing snapshot. You do not need an AI account, ActivityWatch or an SSH connection to try it.
 
-Live limits/reset times, all CLI/tool history, ongoing local-model receipts, Gemini web usage and iPhone activity remain unconnected. Missing sources show unavailable, never fabricated zeroes. Receipt coverage is the named review experiment, not all Google use.
+## Connect your own records
 
-## Privacy and delivery boundary
+The current collector runs on macOS. It expects ActivityWatch on the Mac and Windows PC, ccusage on the Mac and Ubuntu, and working SSH aliases for Windows and Ubuntu.
 
-Raw ActivityWatch stores stay on their owning machines. Windows aggregates before SSH transfer. The Mac saves only allowlisted metrics to ignored `public/local/usage.json` with private file permissions. No prompts, raw commands, window titles, credentials, personal paths or raw app names enter snapshots. Existing tool transcripts are not exported. Local config, data and generated output are excluded from Git. The latest snapshot replaces the previous snapshot; deleting that file clears dashboard data without deleting source history.
+Copy `local.config.example.json` to `local.config.json`. Set the executable paths, SSH aliases and receipt directory for your machines. Keep credentials in your existing SSH and provider settings.
 
-Do not upload a personal generated build: it can contain a copied private snapshot. Public source is separate from private runtime data. `.openai/hosting.json` is an inert scaffold manifest with no registered project. The approved delivery is local only. Other devices can view through existing Mac Remote control; localhost on another device does not mean this Mac.
+```sh
+npm run collect
+```
 
-The pinned Sites starter audit currently reports dependency advisories. Do not expose its development server, RSC/server-function endpoints, or use it as a public deployment. The supported dashboard server is `serve-local.mjs`: Node built-ins, static GET/HEAD only, loopback binding, Host/cross-site checks, no directory listing, no command execution, no CORS, no-store responses. This containment is not a claim that the dependency tree is vulnerability-free; review/update dependencies before broader distribution.
+The collector replaces the dashboard snapshot. Choose **Reload snapshot** in the app to display it. You do not need to rebuild after collecting new records.
 
-## Verification
+Collection runs only when you ask for it. To stop the dashboard, press Ctrl-C in its terminal. ActivityWatch continues recording independently.
 
-Local checks are implemented; hosted CI is not enabled. `ci/check.yml.example` is an inactive GitHub Actions template. The initial publishing login lacks workflow scope, so no broader authentication was requested. A repository owner can enable it later with an appropriately authorized login.
+## How to read the numbers
 
-`npm run test:collectors`, `npx tsc --noEmit`, `npm run build`. Synthetic tests cover allowlisting, invalid metrics, missing data and cumulative receipt deduplication. Non-browser HTTP checks cover root/data serving, cross-site/Host rejection, unsupported methods and traversal. Browser interaction/visual QA has not been performed.
+ActivityWatch records foreground windows and away time. The dashboard groups active window time by app category. This does not measure attention or reliably distinguish human input from computer automation.
 
-Source: [ActivityWatch query documentation](https://docs.activitywatch.net/en/latest/examples/working-with-data.html). The installed 0.13.2 parser requires intermediate assignments rather than the nested calls used in some examples.
+Codex counts come from ccusage reports. Cached tokens are included in the reported total, and reasoning tokens are part of output. These counts cannot tell you how much subscription allowance remains or how much money you spent.
+
+Antigravity receipts may contain cumulative conversation counters. The dashboard keeps the newest snapshot for each conversation instead of adding them together. A failed call shows unknown token usage. A returned response does not establish that its answer was correct.
+
+Dates in token reports use America/New_York. The history shows the latest seven recorded dates, which may have gaps. Activity uses a rolling seven-day window.
+
+## Data and security
+
+Window titles remain in ActivityWatch on their original machines. Windows reduces activity to broad categories before sending it over SSH. The dashboard stores aggregate counts in `public/local/usage.json`. It does not store raw titles, prompts, commands or credentials.
+
+Git excludes personal configuration, snapshots and generated builds. A generated build may contain a copy of your snapshot, so do not upload it. Deleting the snapshot clears the dashboard without deleting the original tool records.
+
+Use `npm run serve:local` for viewing. It serves static files on the loopback address and does not run framework server functions. It has no authentication or multi-user support. Read [SECURITY.md](SECURITY.md) for dependency advisories and deployment limits.
+
+## Development
+
+```sh
+npm run test:collectors
+npx tsc --noEmit
+npm run build
+```
+
+Collector tests use synthetic records to check filtering, invalid values and repeated conversation counters. The interface uses React and Vinext with a static export. The local server uses Node's built-in HTTP module.
+
+Hosted CI is not enabled. [ci/check.yml.example](ci/check.yml.example) contains a GitHub Actions workflow that a repository owner can enable with an authorized login.
+
+The design draws on [lnkiai/m3e-canvas](https://github.com/lnkiai/m3e-canvas), including its Material 3 Expressive navigation, connected controls and tonal surfaces. [Design notes](docs/DESIGN.md) explain how those ideas apply here.
+
+## Contributing
+
+Reproducible bugs, adapter improvements and accessibility fixes are welcome. Use synthetic examples in issues and pull requests. Do not attach personal usage records, transcripts or account details.
+
+The project uses the [MIT license](LICENSE). See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for dependency attribution.
