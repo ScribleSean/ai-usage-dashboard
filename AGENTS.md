@@ -2,6 +2,8 @@
 
 ## Public writing
 
+- Do not use em dashes in replies, UI copy, documentation, comments or other authored writing. Use sentences, commas or parentheses instead. Use "Unknown" for missing values.
+
 - Use plain developer documentation with complete sentences and specific claims. Avoid slogans, dramatic fragments, marketing language and unnecessary jargon such as "local-only observability."
 - Do not use semicolons in public prose. Code syntax is unaffected. Keep commands, links and factual limitations intact during editing.
 - Use [Humanizer](https://github.com/blader/humanizer) as a review reference, not as proof that text is human-authored. It is a Markdown editing guide, not a trained model. Do not invent personal stories, metrics or claims to make writing feel natural.

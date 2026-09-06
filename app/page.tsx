@@ -59,7 +59,7 @@ type Report = {
   agents: Agent[];
 };
 const fmt = (n: number | null | undefined) =>
-  n == null ? '—' : new Intl.NumberFormat('en-US').format(n);
+  n == null ? 'Unknown' : new Intl.NumberFormat('en-US').format(n);
 const compact = (n: number) =>
   new Intl.NumberFormat('en-US', {
     notation: 'compact',
@@ -247,7 +247,7 @@ export default function Home() {
                         <span className="device-time">
                           {a.status === 'ok'
                             ? (sum(a.categories) / 3600).toFixed(1) + 'h'
-                            : '—'}
+                            : 'Unknown'}
                         </span>
                       </TabsTrigger>
                     ))}
@@ -322,7 +322,7 @@ export default function Home() {
                   </div>
                 ) : (
                   <State>
-                    This device’s activity source is unavailable—not zero.
+                    This device’s activity source is unavailable. Its activity is unknown, not zero.
                   </State>
                 )}
                 <div className="lower-strip">
@@ -393,7 +393,7 @@ export default function Home() {
                       </span>
                       <div className="token-number">
                         {latest?.totalTokens == null
-                          ? '—'
+                          ? 'Unknown'
                           : compact(latest.totalTokens)}
                       </div>
                       <p>Total recorded tokens</p>
@@ -491,7 +491,7 @@ export default function Home() {
                       </div>
                       <div className="agent-metric">
                         <strong>
-                          {a.seconds?.toFixed(1) ?? '—'}
+                          {a.seconds?.toFixed(1) ?? 'Unknown'}
                           <small> s</small>
                         </strong>
                         <span>Latest call</span>
@@ -525,7 +525,7 @@ export default function Home() {
                 <details className="method-note">
                   <summary>What these records cover</summary>
                   <p>
-                    Existing Antigravity review receipts only—not every agent or
+                    These are existing Antigravity review receipts, not every agent or
                     terminal command. One newest snapshot per conversation
                     avoids adding cumulative counters twice. Duration is the
                     latest call, not total conversation time. The selected model
@@ -538,7 +538,7 @@ export default function Home() {
                 <div className="view-heading">
                   <div>
                     <h1>Sources</h1>
-                    <p>Know what’s measured—and what isn’t.</p>
+                    <p>See which sources are connected and what is still missing.</p>
                   </div>
                   <span className="period-chip">{sourceCount}/4 read</span>
                 </div>
