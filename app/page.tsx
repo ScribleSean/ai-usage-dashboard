@@ -173,8 +173,8 @@ export default function Home() {
     if (!silent) setLoading(true);
     try {
       const [r,status] = await Promise.all([
-        fetch('/local/usage.json', { cache: 'no-store', signal:AbortSignal.timeout(10000) }),
-        fetch('/local/collector.json', { cache: 'no-store', signal:AbortSignal.timeout(10000) }).then(async r=>r.ok?await r.json() as Collector:null).catch(()=>null),
+        fetch('./local/usage.json', { cache: 'no-store', signal:AbortSignal.timeout(10000) }),
+        fetch('./local/collector.json', { cache: 'no-store', signal:AbortSignal.timeout(10000) }).then(async r=>r.ok?await r.json() as Collector:null).catch(()=>null),
       ]);
       if (!r.ok) throw Error();
       const v = (await r.json()) as Report;
@@ -328,11 +328,11 @@ export default function Home() {
             <span>WORKSPACE USAGE</span>
             <span className={snapshotAge.state==='stale'?'snapshot-stale':''} title={data?new Date(data.collectedAt).toLocaleString():undefined}>
               {data
-                ? 'Collected ' + snapshotAge.label
+                ? data.demo?'Fictional sample records':'Collected ' + snapshotAge.label
                 : 'Waiting for snapshot'}
             </span>
           </div>
-          {data && !error && (snapshotAge.state==='stale' || collector?.state==='failed' || (collector?.state==='running' && !collectorRunning)) && <p className="error-banner" role="status">
+          {data && !data.demo && !error && (snapshotAge.state==='stale' || collector?.state==='failed' || (collector?.state==='running' && !collectorRunning)) && <p className="error-banner" role="status">
             {collector?.state==='failed'?'The last collection failed. Showing the most recent saved snapshot.':collector?.state==='running'&&!collectorRunning?'Collection has not reported completion. The saved snapshot may be out of date.':'This snapshot is over 10 minutes old. The collector may be stopped or the hosting Mac asleep.'}
           </p>}
           {error && (
@@ -841,7 +841,7 @@ export default function Home() {
                 </div>
                 <section className="collection-panel" aria-label="Background collection">
                   <h2>Background collection</h2>
-                  <p>{collector?.intervalSeconds===300?'Expected every 5 minutes while the hosting Mac is awake and logged in.':'No recent scheduled-run status. Manual collection is available with npm run collect.'}</p>
+                  <p>{data.demo?'This public demo uses fixed fictional records. No devices, accounts or collectors are connected.':collector?.intervalSeconds===300?'Expected every 5 minutes while the hosting Mac is awake and logged in.':'No recent scheduled-run status. Manual collection is available with npm run collect.'}</p>
                   {collector && <div className="collection-status"><span className={'run-state '+(collector.state==='failed'||collector.state==='partial'?'warn':'')}>{collectorRunning?'Collecting saved records':collector.state==='running'?'Completion overdue':collector.state==='ok'?'Last run complete':collector.state==='partial'?'Some sources unavailable':'Last run failed'}</span><span>{collector.finishedAt?'Finished '+freshness(collector.finishedAt,now || Date.now()).label:'Started '+collectorAge.label}</span></div>}
                   <p>The page checks for a newer snapshot every 30 seconds while visible. Browsing the dashboard does not launch collection or model tasks.</p>
                 </section>
@@ -874,7 +874,7 @@ export default function Home() {
             </>
           )}
           <footer>
-            <span>Saved records stay on the dashboard host.</span>
+            <span>{data?.demo?'Synthetic data only. No personal activity or account records.':'Saved records stay on the dashboard host.'}</span>
             <a
               href="https://github.com/ScribleSean/ai-usage-dashboard"
               target="_blank"

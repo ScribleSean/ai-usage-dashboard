@@ -19,7 +19,7 @@ This checklist tracks requested dashboard outcomes. Completed items have impleme
 
 ## In progress
 
-- [ ] All time activity with explicit retained-history coverage.
+- [x] All time activity with explicit retained-history coverage.
 - [ ] Identical public demo using synthetic data only.
 - [ ] Published demo linked from the repository and verified on desktop and mobile.
 - [ ] Repository pinned on the profile.

@@ -1,0 +1,45 @@
+name: Publish synthetic demo
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: public-demo
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test && npx tsc --noEmit
+      # Fresh hosted checkout only. Never upload a workstation build.
+      - run: npm run demo
+      - run: npm run build
+        env:
+          DASHBOARD_BASE_PATH: /ai-usage-dashboard
+      - run: node scripts/check-demo-build.mjs
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/client
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
