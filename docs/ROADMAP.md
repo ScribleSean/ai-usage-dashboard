@@ -30,8 +30,8 @@ This checklist tracks requested dashboard outcomes. Completed items have impleme
 - [ ] Verify hold-to-talk and text at the active cursor while speaking, distinct from preview-only streaming.
 - [ ] Configure local-only inference with no paid fallback, automatic submit or always-on recording.
 - [ ] Verify global shortcut conflicts and microphone/accessibility permissions on each host.
-- [ ] Add an optional metadata-only adapter for sessions, duration, word count, latency and failures.
-- [ ] Test both computers and include synthetic dictation data in the public demo.
+- [x] Add optional TypeWhisper daily transcription counts, recorded audio duration, words and fixed engine labels. Exact sessions, latency and failures are unavailable from this source.
+- [x] Verify aggregate collection on Mac and Windows and include fictional dictation data in the public-demo generator.
 
 ## Source gaps
 
