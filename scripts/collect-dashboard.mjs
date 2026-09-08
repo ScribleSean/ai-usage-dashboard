@@ -11,6 +11,8 @@ import { readSettingsSnapshot } from './settings-snapshot.mjs';
 import { combineTokens, combineSettings } from './combine-tokens.mjs';
 import { randomBytes } from 'node:crypto';
 import { powershellCommand } from './powershell-command.mjs';
+import { hostname } from 'node:os';
+import { selectActivityPairs } from './activity-buckets.mjs';
 const exec = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const fields = [
@@ -119,15 +121,15 @@ async function api(suffix, body) {
 }
 async function macActivity() {
   const buckets = Object.values(await api('/buckets/'));
-  const choose = (t) => {
-    const rows = buckets.filter((x) => x.type === t);
-    if (rows.length !== 1) throw Error('Ambiguous collectors');
-    return rows[0].id;
-  };
-  const w = choose('currentwindow'),
-    a = choose('afkstatus'),
-    end = new Date(),
-    start = new Date(end - 7 * 86400000);
+  const hostnames = [hostname()];
+  // Watchers can use the Bonjour name while the server uses the Unix hostname.
+  if (process.platform === 'darwin') {
+    const {stdout} = await exec('/usr/sbin/scutil', ['--get','LocalHostName'], {timeout:5000,maxBuffer:4096});
+    hostnames.push(stdout.trim());
+  }
+  const pairs = selectActivityPairs(buckets,hostnames);
+  const end = new Date(), start = new Date(end - 7 * 86400000);
+  const reports = await Promise.all(pairs.map(async ({window:w,afk:a}) => {
   const q = `w = query_bucket(${JSON.stringify(w)}); a = query_bucket(${JSON.stringify(a)}); a = filter_keyvals(a, "status", ["not-afk"]); RETURN = filter_period_intersect(w, a);`;
   const [events] = await api('/query/', {
     query: [q],
@@ -146,16 +148,14 @@ async function macActivity() {
     return {start:e.timestamp,end:new Date(Date.parse(e.timestamp)+e.duration*1000).toISOString()};
   });
   const latest = await api(`/buckets/${encodeURIComponent(w)}/events?limit=1`);
-  return cleanActivity(
-    {
-      intervals,
-      trackingIntervals,
-      start: start.toISOString(),
-      end: end.toISOString(),
-      latestEvent: latest[0]?.timestamp,
-    },
-    'Mac',
-  );
+  return {intervals,trackingIntervals,latestEvent:latest[0]?.timestamp};
+  }));
+  return cleanActivity({
+    intervals:reports.flatMap(r=>r.intervals),
+    trackingIntervals:reports.flatMap(r=>r.trackingIntervals),
+    start:start.toISOString(), end:end.toISOString(),
+    latestEvent:reports.map(r=>r.latestEvent).filter(v=>Number.isFinite(Date.parse(v))).sort((a,b)=>Date.parse(a)-Date.parse(b)).at(-1),
+  },'Mac');
 }
 export function cleanReceipts(rows) {
   // A continued conversation may report cumulative counters. Keep its newest snapshot only.

@@ -33,6 +33,8 @@ Shared identifiers, cross-host parent relationships or a shared parent block the
 
 ## Weekly activity timeline
 
+On macOS, the collector accepts watcher pairs matching the local Unix hostname or Bonjour LocalHostName. This handles separate local bucket histories without choosing the newest pair and dropping earlier records. Each window watcher must have exactly one away-status watcher under the same bucket hostname. Other computer names are excluded, ambiguous local pairs fail closed, and overlapping accepted histories count once. Bucket names remain in memory and are not saved in the dashboard.
+
 Week shows seven dated rows with eight slim three-hour bands per row. Hover or focus highlights the same time band across days. Select a band to retain its active and tracked duration below the chart, or select a date to open Day. Missing tracking records are muted and do not display a zero activity total. A tracked interval with no active time can display zero. Tracking coverage comes from intersecting window and away-status records, including idle records. It does not establish full-day coverage. Repeated daylight-saving hours share a band, while totals retain elapsed duration.
 
 Model rows show a standard short-context API comparison and its share of the priced subtotal, not a share of the subscription bill. Expanded settings rows can apply the published Fast-mode rates where the tier was recorded. Reasoning tokens remain part of output. Long-context pricing, tools, regional adjustments and unreported cache writes are excluded. Rates were checked against [OpenAI pricing](https://developers.openai.com/api/docs/pricing) on September 6, 2026.
