@@ -25,10 +25,10 @@ jobs:
       - run: npm run build
         env:
           DASHBOARD_BASE_PATH: /ai-usage-dashboard
-      - run: node scripts/check-demo-build.mjs
+      - run: node scripts/prepare-pages.mjs
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: dist/client
+          path: dist/pages
   deploy:
     needs: build
     runs-on: ubuntu-latest
