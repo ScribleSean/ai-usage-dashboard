@@ -13,10 +13,12 @@ This checklist tracks requested dashboard outcomes. Completed items have impleme
 - [x] Codex allowance snapshots and local model benchmark receipts.
 - [x] Compact weekly activity with three-hour bands, interactive details and tracking coverage.
 - [x] Public source repository with private snapshots excluded.
+- [x] Day, Week and All time token controls with period-matched model and host totals.
+- [x] Recorded tool identifiers and namespaces with per-date call counts.
+- [x] Bounded handoff receipt discovery, safe roles and explicit incomplete coverage.
 
 ## In progress
 
-- [ ] Day, Week and All time controls for Tokens.
 - [ ] All time activity with explicit retained-history coverage.
 - [ ] Identical public demo using synthetic data only.
 - [ ] Published demo linked from the repository and verified on desktop and mobile.

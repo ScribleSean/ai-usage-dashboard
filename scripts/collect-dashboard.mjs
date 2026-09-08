@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { readFile, writeFile, rename, mkdir, stat } from 'node:fs/promises';
+import { readFile, writeFile, rename, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { cleanIntervals, summarizeTracked, appLabel } from './activity-timeline.mjs';
@@ -13,6 +13,8 @@ import { randomBytes } from 'node:crypto';
 import { powershellCommand } from './powershell-command.mjs';
 import { hostname } from 'node:os';
 import { selectActivityPairs } from './activity-buckets.mjs';
+import { readAgentReceipts } from './agent-receipts.mjs';
+export { cleanReceipts } from './agent-receipts.mjs';
 const exec = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const fields = [
@@ -34,7 +36,12 @@ export function cleanSettings(raw, host) {
     speed:['standard','fast'].includes(r.speed)?r.speed:'unknown',
     ...Object.fromEntries(fields.map(k=>[k,numeric(r[k])])),
   }));
-  const tools = raw.tools.filter(r => /^\d{4}-\d{2}-\d{2}$/.test(r.date) && ['Shell','File edits','Browser','Research','Other tools'].includes(r.category) && numeric(r.count)!==null).map(r=>({date:r.date,category:r.category,count:r.count}));
+  const identifier = value => typeof value === 'string' && /^[A-Za-z0-9_][A-Za-z0-9_.:/-]{0,199}$/.test(value);
+  const tools = raw.tools.filter(r => !['history','notes'].includes(r.namespace) && !/^(history|notes)(\.|__)/.test(r.tool || '') && /^\d{4}-\d{2}-\d{2}$/.test(r.date) && ['Shell','File edits','Browser','Research','Other tools'].includes(r.category) && Number.isSafeInteger(r.count) && r.count>=0).map(r=>({
+    date:r.date,category:r.category,count:r.count,
+    tool:r.tool===undefined?null:identifier(r.tool)?r.tool:'Unknown tool',
+    namespace:identifier(r.namespace)?r.namespace:'',
+  }));
   return {host,status:'ok',profiles,tools};
 }
 export function category(app) {
@@ -157,31 +164,6 @@ async function macActivity() {
     latestEvent:reports.map(r=>r.latestEvent).filter(v=>Number.isFinite(Date.parse(v))).sort((a,b)=>Date.parse(a)-Date.parse(b)).at(-1),
   },'Mac');
 }
-export function cleanReceipts(rows) {
-  // A continued conversation may report cumulative counters. Keep its newest snapshot only.
-  const latest = new Map();
-  for (const { value: v, modified } of rows) {
-    if (typeof v.conversationId !== 'string') continue;
-    const prior = latest.get(v.conversationId);
-    if (!prior || modified > prior.modified)
-      latest.set(v.conversationId, { value: v, modified });
-  }
-  return [...latest.values()].map(({ value: v, modified }, i) => ({
-    id: `review-${i + 1}`,
-    model: /^[a-zA-Z0-9._-]{1,100}$/.test(v.requestedModel)
-      ? v.requestedModel
-      : 'unknown',
-    status: v.status === 'SUCCESS' ? 'completed' : 'failed',
-    failure: v.status !== 'SUCCESS' && /timeout/i.test(v.error || '') ? 'Response timed out. Cause not established.' : null,
-    seconds: numeric(v.elapsedSeconds),
-    recordedAt: new Date(modified).toISOString(),
-    // Error snapshots often contain zeros that are not reliable usage accounting.
-    input: v.status === 'SUCCESS' ? numeric(v.usage?.input_tokens) : null,
-    output: v.status === 'SUCCESS' ? numeric(v.usage?.output_tokens) : null,
-    cache: v.status === 'SUCCESS' ? numeric(v.usage?.cache_read_tokens) : null,
-    total: v.status === 'SUCCESS' ? numeric(v.usage?.total_tokens) : null,
-  }));
-}
 async function guarded(host, fn) {
   try {
     return {...await fn(), checkedAt:new Date().toISOString()};
@@ -246,7 +228,6 @@ export async function collect() {
       }))};
     }) : Promise.resolve({host:'Ubuntu',status:'not-connected'}),
   ]);
-  const rows = [];
   // Comparison keys change every collection and never enter the saved report.
   const settingsScript = `INVENTORY_SALT = '${randomBytes(32).toString('hex')}'\n` + await readFile(path.join(root,'scripts/read-settings.py'),'utf8');
   const inventories = {};
@@ -264,15 +245,7 @@ export async function collect() {
     else inventories[host] = {status:'incomplete'};
     return result.settings;
   }):Promise.resolve({host,status:'not-connected'})));
-  for (const name of ['run', 'followup', 'safety', 'runtime']) {
-    const f = path.join(config.receiptDirectory, name + '.usage.json');
-    try {
-      rows.push({
-        value: JSON.parse(await readFile(f, 'utf8')),
-        modified: (await stat(f)).mtimeMs,
-      });
-    } catch {}
-  }
+  const receipts = await readAgentReceipts(config.receiptDirectory);
   const readable = [mac, windows].filter(x => x.status === 'ok' && x.intervals);
   const combined = readable.length === 2 ? (() => {
     const start = new Date(Math.max(...readable.map(x => Date.parse(x.start)))).toISOString();
@@ -291,7 +264,8 @@ export async function collect() {
     tokens: tokenSources,
     combinedTokens,
     combinedSettings: combinedTokens.status === 'ok' ? combineSettings(tokenSources,settings) : {host:'All',status:'unavailable'},
-    agents: cleanReceipts(rows),
+    agents: receipts.agents,
+    agentSource: receipts.source,
     quota,
     localModel,
     settings,

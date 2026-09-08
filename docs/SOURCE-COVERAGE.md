@@ -25,6 +25,8 @@ Before showing a settings breakdown, every token-category subtotal must fit the 
 
 ## All-host tokens
 
+Day selects one recorded date. Week selects the seven calendar days ending at the selected date. All time includes every available daily row in the source report, not only the recent settings scan. Deleted or unlogged requests are not recoverable. Model and host contributions use the same selected period, and unknown counters remain unknown.
+
 All combines Mac, Ubuntu and native Windows daily Codex reports. It includes a by-host contribution breakdown, combined model rows and the same standard API comparison. Saved external-agent review receipts and local benchmark measurements are not added to these totals.
 
 Before aggregation, every host must return a successful token report and complete session-metadata inventory. Each collection generates a fresh random salt. Source machines turn session and parent identifiers into HMAC comparison keys. These temporary keys exist only during collection and are discarded before the snapshot is written. Only the verification result and overlap counts are saved.
@@ -44,6 +46,10 @@ Model rows show a standard short-context API comparison and its share of the pri
 The optional quota reader starts a short-lived local Codex app-server process, initializes it and calls only `account/rateLimits/read`. It exits after a response or a bounded timeout. It uses the existing authenticated client, never reads credentials into the dashboard, never launches a task, and never redeems resets or requests credits. Account IDs and credit details are discarded. See the [official protocol](https://learn.chatgpt.com/docs/app-server).
 
 ## Gaps requiring a separate approach
+
+Recorded tool rows preserve case-sensitive identifiers and directly recorded namespaces. Expand a tool to see counts by date. Older category-only snapshots are labeled as legacy aggregates. The recent saved-log scan is bounded, and private bookkeeping is excluded. Calls nested inside a wrapper are not reconstructed from arguments. Counts do not establish success, duration or every tool execution.
+
+Handoff discovery reads top-level `.usage.json` files only in the configured folder. It rejects symbolic links, limits individual files to 1 MiB, aggregate reads to 8 MiB, matching files to 128, and directory scanning to 10,000 entries. Skipped records or limits produce incomplete coverage. Missing folders are unavailable, not empty successful histories. Continued conversations retain their newest snapshot with a deterministic filename tie-break instead of summing cumulative counters. Roles are restricted to Coordinator, Subagent and Unknown. A role is not inferred from a model name or filename.
 
 - iPhone activity is not a plug-in source for this web dashboard. Apple's [DeviceActivityReport](https://developer.apple.com/documentation/deviceactivity/deviceactivityreport) runs inside a privacy-preserving extension sandbox that restricts exporting sensitive activity. Do not bypass that boundary. A user-supplied summary is a possible future input, not an installed feature.
 - Google documents [Gemini data export](https://support.google.com/gemini/answer/16920332?hl=en), including activity and conversations. That does not establish a token-billing report. No export or transcript import has been requested here. A future metadata-only importer needs an inspected sample and explicit scope.

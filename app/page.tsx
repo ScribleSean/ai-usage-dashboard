@@ -4,6 +4,8 @@ import { settingsCoverage } from '../scripts/settings-coverage.mjs';
 import { estimate } from '../scripts/api-estimate.mjs';
 import { freshness } from '../scripts/freshness.mjs';
 import WeekTimeline from './week-timeline';
+import ToolDetail from './tool-detail';
+import { selectTokenDays, aggregateProfiles } from '../scripts/token-periods.mjs';
 import {
   Activity,
   Layers3,
@@ -37,6 +39,9 @@ import {
 } from '@/components/ui/table';
 
 type Tokens = {
+  startDate?: string;
+  endDate?: string;
+  recordedDays?: number;
   apiEstimate?: { usd: number | null; coveredTokens: number; excluded: number; checked: string };
   date: string;
   totalTokens: number | null;
@@ -56,6 +61,7 @@ type ActivityRow = {
   days?: { date: string; seconds: number; hours: number[]; trackedSeconds?:number;trackedHours?:number[];categories: Record<string, number>; apps?:Record<string,Record<string,number>> }[];
 };
 type Agent = {
+  role?:string;
   failure?: string | null;
   id: string;
   model: string;
@@ -65,9 +71,10 @@ type Agent = {
   recordedAt: string;
 };
 type Report = {
+  agentSource?:{status:string;checkedAt?:string;skipped:number;limited:boolean};
   quota?: {status:string;checkedAt?:string;windows?:{bucket:string;window:string;remainingPercent:number;durationMinutes:number|null;resetsAt:string|null}[]};
   localModel?: {status:string;checkedAt?:string;records?:{model:string;status:string;recordedAt:string|null;seconds:number|null;input:number|null;cached:number|null;output:number|null;ttft:number|null;peakGpuMiB:number|null}[]};
-  settings?: {host:string;status:string;checkedAt?:string;snapshotStable?:boolean;profiles?:{date:string;model:string;effort:string;speed:string;totalTokens:number;inputTokens:number;cacheReadTokens:number;cacheCreationTokens:number;outputTokens:number}[];tools?:{date:string;category:string;count:number}[]}[];
+  settings?: {host:string;status:string;checkedAt?:string;snapshotStable?:boolean;profiles?:{date:string;model:string;effort:string;speed:string;totalTokens:number;inputTokens:number;cacheReadTokens:number;cacheCreationTokens:number;outputTokens:number}[];tools?:{date:string;category:string;count:number;tool?:string|null;namespace?:string}[]}[];
   combinedTokens?: {host:string;status:string;days?:Tokens[];verification?:{status:string}};
   combinedSettings?: NonNullable<Report['settings']>[number];
   combined?: ActivityRow;
@@ -154,6 +161,7 @@ export default function Home() {
     [period, setPeriod] = useState('day'),
     [tokenHost, setTokenHost] = useState('All'),
     [tokenDate, setTokenDate] = useState(''),
+    [tokenPeriod, setTokenPeriod] = useState('day'),
     [mobile, setMobile] = useState(false);
   const load = useCallback(async (silent=false) => {
     if (inFlight.current) return;
@@ -227,9 +235,16 @@ export default function Home() {
     clock = time(seconds);
   const tokenSources = data ? [data.combinedTokens || {host:'All',status:'unverified'},...data.tokens] : [];
   const tokenSource = tokenSources.find((t) => t.host === tokenHost),
-    days = tokenSource?.days?.slice(-7) || [],
-    latest = days.find(d => d.date === tokenDate) || days.at(-1);
+    days = tokenSource?.days || [],
+    tokenAnchor = tokenDate || days.at(-1)?.date || '',
+    latest: Tokens | undefined = tokenAnchor ? selectTokenDays(days,tokenPeriod,tokenAnchor) : undefined;
+  const tokenStart = tokenPeriod==='all' ? days[0]?.date : tokenPeriod==='week' ? shiftDate(tokenAnchor || '2000-01-01',-6) : tokenAnchor;
+  const tokenEnd = tokenPeriod==='all' ? days.at(-1)?.date : tokenAnchor;
+  const tokenLabel = tokenPeriod==='day' ? dateLabel(tokenAnchor) : `${dateLabel(tokenStart || '')} to ${dateLabel(tokenEnd || '')}`;
+  const tokenPrevious=tokenAnchor?shiftDate(tokenAnchor,tokenPeriod==='week'?-7:-1):'';
+  const tokenNext=tokenAnchor?shiftDate(tokenAnchor,tokenPeriod==='week'?7:1):'';
   const sourceRows = data ? [
+    ...(data.agentSource?[{host:'Local',kind:'Handoff receipts',status:data.agentSource.status,checkedAt:data.agentSource.checkedAt}]:[]),
     ...data.activity.map(a=>({...a,kind:'ActivityWatch'})), ...data.tokens.map(t=>({...t,kind:'Codex logs'})),
     ...(data.quota?[{host:'Codex account',kind:'Limits snapshot',status:data.quota.status,checkedAt:data.quota.checkedAt}]:[]),
     ...(data.localModel?[{host:'Ubuntu',kind:'Local model receipts',status:data.localModel.status,checkedAt:data.localModel.checkedAt}]:[]),
@@ -495,7 +510,19 @@ export default function Home() {
                     <h1>Tokens</h1>
                     <p>Model workload, not hours worked. Activity shows recorded computer time.</p>
                   </div>
-                  <span className="period-chip">America/New_York</span>
+                  <div className="period-controls">
+                    <ToggleGroup value={[tokenPeriod]} onValueChange={v=>v[0] && setTokenPeriod(v[0])} aria-label="Token period" className="period-switch">
+                      <ToggleGroupItem value="day">Day</ToggleGroupItem>
+                      <ToggleGroupItem value="week">Week</ToggleGroupItem>
+                      <ToggleGroupItem value="all">All time</ToggleGroupItem>
+                    </ToggleGroup>
+                    <div className="date-navigation">
+                      <Button variant="ghost" aria-label={`Previous token ${tokenPeriod}`} disabled={tokenPeriod==='all'||!days.length||tokenPrevious<days[0].date} onClick={()=>setTokenDate(tokenPrevious)}><ChevronLeft size={18}/></Button>
+                      <span aria-live="polite">{tokenLabel}</span>
+                      <Button variant="ghost" aria-label={`Next token ${tokenPeriod}`} disabled={tokenPeriod==='all'||!days.length||tokenNext>(days.at(-1)?.date||'')} onClick={()=>setTokenDate(tokenNext)}><ChevronRight size={18}/></Button>
+                    </div>
+                    <small>New York time</small>
+                  </div>
                 </div>
                 {data.quota && <details className="allowance-panel">
                   <summary>Codex limits <span>{data.quota.status==='ok'?'Latest check':'Unavailable'}</span></summary>
@@ -509,7 +536,7 @@ export default function Home() {
                 <Tabs
                   value={tokenHost}
                   onValueChange={(v) =>
-                    typeof v === 'string' && setTokenHost(v)
+                    typeof v === 'string' && (setTokenHost(v),setTokenDate(''))
                   }
                   className="host-tabs"
                 >
@@ -529,11 +556,11 @@ export default function Home() {
                     ))}
                   </TabsList>
                 <TabsContent value={tokenHost}>
-                {tokenSource?.status === 'ok' && days.length ? (
+                {tokenSource?.status === 'ok' && latest ? (
                   <div className="token-layout">
                     <section className="token-summary">
                       <span className="surface-label">
-                        Selected day · {latest?.date}
+                        {tokenPeriod==='all'?'All time':tokenPeriod==='week'?'Selected week':'Selected day'} · {tokenLabel}
                       </span>
                       <div className="token-number">
                         {latest?.totalTokens == null
@@ -541,6 +568,7 @@ export default function Home() {
                           : compact(latest.totalTokens)}
                       </div>
                       <p>Total recorded tokens</p>
+                      {tokenPeriod==='all' && <p className="small-note">All available log history, across {latest.recordedDays} recorded dates. Deleted or unlogged requests cannot be recovered.</p>}
                       {tokenHost==='All' && <p className="small-note">Mac + Ubuntu + Windows</p>}
                       <div className="token-parts">
                         <div>
@@ -567,7 +595,7 @@ export default function Home() {
                       {tokenHost==='All' && <section className="host-contributions" aria-label="Contribution by host">
                         <h3>By host</h3>
                         {data.tokens.map(source=>{
-                          const day=source.days?.find(d=>d.date===latest?.date);
+                          const day=selectTokenDays(source.days||[],tokenPeriod,tokenAnchor);
                           const amount=day?.totalTokens ?? 0;
                           return <div className="host-contribution" key={source.host}>
                             <span>{source.host}</span><strong>{compact(amount)}<small>{latest?.totalTokens ? `${(amount/latest.totalTokens*100).toFixed(1)}% of tokens`:'No recorded tokens'}</small></strong>
@@ -581,11 +609,15 @@ export default function Home() {
                     <section className="table-surface">
                       <div className="table-heading">
                         <h2>By model</h2>
-                        <span>{latest?.date}</span>
+                        <span>{tokenLabel}</span>
                       </div>
                       <div className="model-breakdown">
                         {[...(latest?.models || [])].sort((a,b) => (b.totalTokens || 0) - (a.totalTokens || 0)).map(m => {
-                          const coverage=settingsCoverage(m,(settingsSource?.profiles||[]).filter(p=>p.date===latest?.date&&p.model===m.model));
+                          const reconciled=days.filter(d=>d.date>=(tokenStart||'')&&d.date<=(tokenEnd||'')).flatMap(d=>{
+                            const model=d.models.find(row=>row.model===m.model&&row.inferred===m.inferred);
+                            return model?settingsCoverage(model,(settingsSource?.profiles||[]).filter(p=>p.date===d.date&&p.model===m.model)).rows:[];
+                          });
+                          const coverage=settingsCoverage(m,aggregateProfiles(reconciled));
                           return (
                           <details className="model-detail" key={m.model+String(m.inferred)}>
                             <summary>
@@ -634,7 +666,7 @@ export default function Home() {
                         <TableBody>
                           {[...days].reverse().map((d) => (
                             <TableRow key={d.date}>
-                              <TableCell><Button variant="ghost" aria-pressed={latest?.date === d.date} onClick={() => setTokenDate(d.date)}>{d.date}</Button></TableCell>
+                              <TableCell><Button variant="ghost" aria-pressed={tokenPeriod==='day' && tokenAnchor === d.date} onClick={() => {setTokenDate(d.date);setTokenPeriod('day');}}>{d.date}</Button></TableCell>
                               <TableCell className="align-right">
                                 {fmt(d.totalTokens)}
                               </TableCell>
@@ -648,7 +680,7 @@ export default function Home() {
                 ) : (
                   <State>
                     {tokenSource?.status === 'ok'
-                      ? 'No recorded days found for this source.'
+                      ? 'No token records in this period. Select another date or All time.'
                       : tokenHost==='All' ? tokenSource?.status==='overlap'?'These hosts contain shared or related session records. The All total is withheld to avoid double-counting. Individual host views remain available.':'An All total needs three successful token reads and a complete cross-host overlap check. Individual host views remain available.' : tokenSource?.status === 'not-connected' ? 'Native Windows token logs are not connected yet. Ubuntu covers WSL only, not the Windows app.' : 'This token source is unavailable.'}
                   </State>
                 )}
@@ -657,7 +689,7 @@ export default function Home() {
                 <details className="method-note">
                   <summary>Models & counting rules</summary>
                   <p>
-                    Latest day:{' '}
+                    Models in this period:{' '}
                     {latest?.models
                       .map((m) => m.model + (m.inferred ? ' (inferred)' : ''))
                       .join(', ') || 'No model records'}
@@ -673,7 +705,7 @@ export default function Home() {
                     <h1>Agent work</h1>
                     <p>Agent requests and their recorded results.</p>
                   </div>
-                  <span className="source-caption">Saved review runs</span>
+                  <span className="source-caption">Saved handoff receipts</span>
                 </div>
                 <section className="agent-list">
                   {data.agents.map((a) => (
@@ -691,6 +723,7 @@ export default function Home() {
                           {new Date(a.recordedAt).toLocaleDateString()} · latest
                           conversation snapshot
                         </p>
+                        <p>Role: {a.role || 'Unknown'}</p>
                         {a.failure && <p>{a.failure}</p>}
                       </div>
                       <div className="agent-metric">
@@ -717,8 +750,10 @@ export default function Home() {
                   ))}
                 </section>
                 {!data.agents.length && (
-                  <State>No handoff receipts found.</State>
+                  <State>{data.agentSource && data.agentSource.status!=='ok'?'Handoff receipts could not be fully read. Missing records are not zero usage.':'No handoff receipts found in the configured folder.'}</State>
                 )}
+                {data.agentSource && data.agentSource.status!=='ok' && data.agents.length>0 && <p className="quiet-note">Receipt coverage is incomplete. Some files were unreadable or a scan limit was reached.</p>}
+                <p className="small-note">Only top-level usage receipts in the configured folder are included. This is not a complete history of all agents or providers.</p>
                 <div className="quiet-note">
                   <CircleHelp size={18} />
                   <p>
@@ -752,10 +787,8 @@ export default function Home() {
                   }):<p>Local receipts unavailable.</p>}
                 </section>}
                 {!!data.settings?.length && <details className="receipt-panel tool-panel"><summary>Recorded tool calls</summary><p>Recent saved Codex logs only. Counts are requests, not proof of successful execution or time worked. General SSH commands and unlogged tools are not captured. Hosts are not added together.</p>
-                  {data.settings.map(source=>{
-                    const counts:Record<string,number>={};source.tools?.forEach(t=>{counts[t.category]=(counts[t.category]||0)+t.count;});
-                    return <div key={source.host} className="tool-host"><h3>{source.host}</h3>{source.status==='ok'?<div className="tool-counts">{Object.entries(counts).map(([label,count])=><span key={label}>{label} <strong>{fmt(count)}</strong></span>)}{!Object.keys(counts).length&&<span>No saved calls in this scan.</span>}</div>:<p>Unavailable</p>}</div>;
-                  })}
+                  <p>Expand a tool for dated counts. Names and namespaces come from recorded metadata. Calls nested inside a wrapper are not inferred from its code or arguments.</p>
+                  {data.settings.map(source=><div key={source.host} className="tool-host"><h3>{source.host}</h3>{source.status==='ok'?<ToolDetail rows={source.tools}/>:<p>Unavailable</p>}</div>)}
                 </details>}
               </TabsContent>
               <TabsContent value="sources" className="view-panel">

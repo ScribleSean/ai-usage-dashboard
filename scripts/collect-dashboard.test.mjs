@@ -6,7 +6,19 @@ import {
   cleanActivity,
   cleanTokens,
   cleanReceipts,
+  cleanSettings,
 } from './collect-dashboard.mjs';
+test('tool metadata survives sanitization and legacy categories remain explicit',()=>{
+  const row={date:'2026-09-06',category:'Other tools',count:2};
+  const result=cleanSettings({profiles:[],tools:[row,{...row,tool:'MCP.Tool',namespace:'my_tools',arguments:'PRIVATE'},
+    {...row,tool:'PRIVATE NAME',namespace:'PRIVATE NAMESPACE'},{...row,count:0.5}]},'Mac');
+  assert.equal(result.tools.length,3);
+  assert.equal(result.tools[0].tool,null);
+  assert.equal(result.tools[1].tool,'MCP.Tool');
+  assert.equal(result.tools[1].namespace,'my_tools');
+  assert.equal(result.tools[2].tool,'Unknown tool');
+  assert.ok(!JSON.stringify(result).includes('PRIVATE'));
+});
 test('numeric metrics reject coercion, negative and nonfinite values', () => {
   for (const x of [-1, NaN, Infinity, '12', null])
     assert.equal(numeric(x), null);

@@ -80,7 +80,7 @@ def run_collection(root, node, interval=0, timeout=240):
             if not isinstance(snapshot_at, str) or dt.datetime.fromisoformat(snapshot_at.replace('Z', '+00:00')) < dt.datetime.fromisoformat(started.replace('Z', '+00:00')):
                 raise ValueError('No new snapshot')
             sources = snapshot.get('activity', []) + snapshot.get('tokens', []) + snapshot.get('settings', [])
-            sources += [snapshot[k] for k in ('quota', 'localModel') if isinstance(snapshot.get(k), dict)]
+            sources += [snapshot[k] for k in ('quota', 'localModel', 'agentSource') if isinstance(snapshot.get(k), dict)]
             sources = [s for s in sources if s.get('status') != 'not-connected']
             read = sum(s.get('status') == 'ok' for s in sources)
             state.update(state='ok' if sources and read == len(sources) else 'partial',

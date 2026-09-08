@@ -5,6 +5,7 @@ import hmac
 import json
 import math
 import pathlib
+import re
 import sys
 from zoneinfo import ZoneInfo
 
@@ -17,6 +18,9 @@ def number(x):
 
 def label(x):
     return x if isinstance(x, str) and 0 < len(x) <= 100 and all(c.isalnum() or c in '-_./:' for c in x) else 'unknown'
+
+def tool_identifier(value, fallback):
+    return value if isinstance(value, str) and re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.:/-]{0,199}', value) else fallback
 
 def inventory_metadata(meta, salt):
     """Ephemeral comparison keys only. The collector never saves these keys."""
@@ -83,10 +87,15 @@ def summarize(events, cutoff):
             if not isinstance(call_id, str) or call_id in seen_calls:
                 continue
             seen_calls.add(call_id)
-            name = str(p.get('name', '')).lower()
+            tool = tool_identifier(p.get('name'), 'Unknown tool')
+            namespace = tool_identifier(p.get('namespace'), '')
+            if namespace in ('history', 'notes') or tool.startswith(('history.', 'notes.', 'history__', 'notes__')):
+                continue
+            name = tool.lower()
             category = 'Shell' if any(x in name for x in ('exec_command','write_stdin','shell')) else 'File edits' if 'apply_patch' in name else 'Browser' if any(x in name for x in ('browser','cua')) else 'Research' if any(x in name for x in ('web','search')) else 'Other tools'
             if stamp >= cutoff:
-                tools[(date,category)] = tools.get((date,category),0)+1
+                key = (date, category, tool, namespace)
+                tools[key] = tools.get(key, 0) + 1
         if event.get('type') != 'event_msg' or p.get('type') != 'token_count':
             continue
         raw = (p.get('info') or {}).get('total_token_usage')
@@ -117,7 +126,7 @@ def summarize(events, cutoff):
         row = profiles.setdefault(key, dict(date=date,model=model,effort=effort,speed=speed,inputTokens=0,cacheReadTokens=0,cacheCreationTokens=0,outputTokens=0,reasoningOutputTokens=0,totalTokens=0))
         for dest, value in dict(inputTokens=uncached,cacheReadTokens=delta['cached_input_tokens'],cacheCreationTokens=delta['cache_write_input_tokens'],outputTokens=delta['output_tokens'],reasoningOutputTokens=delta['reasoning_output_tokens'],totalTokens=delta['total_tokens']).items():
             row[dest] += value
-    return list(profiles.values()), [dict(date=d,category=c,count=n) for (d,c),n in tools.items()]
+    return list(profiles.values()), [dict(date=d,category=c,tool=t,namespace=s,count=n) for (d,c,t,s),n in tools.items()]
 
 def collect(folder):
     root = pathlib.Path(folder).resolve(strict=True)
@@ -179,9 +188,9 @@ def collect(folder):
                 for field in ('inputTokens','cacheReadTokens','cacheCreationTokens','outputTokens','reasoningOutputTokens','totalTokens'):
                     profiles[key][field]+=row[field]
         for row in calls:
-            key=(row['date'],row['category'])
+            key=(row['date'],row['category'],row['tool'],row['namespace'])
             tools[key]=tools.get(key,0)+row['count']
-    result = dict(status='ok',profiles=list(profiles.values()),tools=[dict(date=d,category=c,count=n) for (d,c),n in sorted(tools.items())],scope='Recent saved Codex logs only')
+    result = dict(status='ok',profiles=list(profiles.values()),tools=[dict(date=d,category=c,tool=t,namespace=s,count=n) for (d,c,t,s),n in sorted(tools.items())],scope='Recent saved Codex logs only')
     if salt:
         result['inventory'] = {k:sorted(v) if isinstance(v,set) else v for k,v in inventory.items()}
     return result

@@ -21,6 +21,23 @@ test('unknown settings are not guessed and tool arguments never leave reader',()
   assert.equal(tools[0].count,1);assert.equal(tools[0].category,'Shell');assert.ok(!output.includes('SECRET'));assert.ok(!output.includes('private-id'));
 });
 
+test('exact tool identities preserve case and namespace without reading arguments',()=>{
+  const call=(name,namespace,id,timestamp='2026-09-06T12:00:00Z')=>({timestamp,type:'response_item',payload:{type:'function_call',name,namespace,call_id:id,arguments:'PRIVATE_ARGUMENTS'}});
+  const output=execFileSync('python3',['-c',code],{input:JSON.stringify([
+    call('ToolName','one','a'),call('ToolName','two','b'),call('toolname','one','c'),call('ToolName','one','a'),
+    call('functions.exec',undefined,'d'),call('PRIVATE NAME','BAD NAMESPACE','e'),call('x'.repeat(201),null,'f'),
+    call('old_tool','one','g','2025-12-01T12:00:00Z')
+  ])}).toString();
+  const [,rows]=JSON.parse(output);
+  assert.equal(rows.length,5);
+  assert.equal(rows.find(r=>r.tool==='ToolName'&&r.namespace==='one').count,1);
+  assert.equal(rows.find(r=>r.tool==='ToolName'&&r.namespace==='two').count,1);
+  assert.equal(rows.find(r=>r.tool==='toolname').count,1);
+  assert.equal(rows.find(r=>r.tool==='functions.exec').namespace,'');
+  assert.equal(rows.find(r=>r.tool==='Unknown tool').count,2);
+  for(const secret of ['PRIVATE','BAD NAMESPACE','old_tool','x'.repeat(201)]) assert.ok(!output.includes(secret));
+});
+
 test('last request usage survives a cumulative reset without counting repeated reports',()=>{
   const first=usage(100),reset=usage(20);
   reset.payload.info.last_token_usage=usage(50).payload.info.total_token_usage;

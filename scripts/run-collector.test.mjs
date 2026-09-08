@@ -30,6 +30,12 @@ test('failure preserves the preceding snapshot and records no error text',async 
   assert.equal(run(root),'failed');assert.equal(await readFile(path.join(root,'public/local/usage.json'),'utf8'),'previous snapshot');
   assert.equal((await status(root)).state,'failed');
 });
+test('partial agent receipt coverage prevents an all-sources-success status',async t=>{
+  const root=await fixture(t,success.replace("settings:[]","settings:[],agentSource:{status:'partial'}"));
+  assert.equal(run(root),'partial');
+  const s=await status(root);
+  assert.equal(s.sourcesRead,1);assert.equal(s.sourcesConfigured,2);
+});
 test('a timed-out reader is stopped and the operating-system lock is released',async t=>{
   const root=await fixture(t,`setInterval(()=>{},1000);`);
   assert.equal(run(root,0.1),'failed');
