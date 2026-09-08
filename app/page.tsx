@@ -51,6 +51,9 @@ type Tokens = {
   models: { model: string; inferred: boolean; inputTokens?: number | null; cacheReadTokens?: number | null; cacheCreationTokens?: number | null; outputTokens?: number | null; totalTokens?: number | null; apiEstimate?: { usd: number | null; parts?:Record<string,number>|null } }[];
 };
 type ActivityRow = {
+  asOf?:string|null;
+  latestReadStatus?:string;
+  maxDates?:number;
   host: string;
   status: string;
   checkedAt?: string;
@@ -71,6 +74,7 @@ type Agent = {
   recordedAt: string;
 };
 type Report = {
+  activityHistory?:ActivityRow[];
   agentSource?:{status:string;checkedAt?:string;skipped:number;limited:boolean};
   quota?: {status:string;checkedAt?:string;windows?:{bucket:string;window:string;remainingPercent:number;durationMinutes:number|null;resetsAt:string|null}[]};
   localModel?: {status:string;checkedAt?:string;records?:{model:string;status:string;recordedAt:string|null;seconds:number|null;input:number|null;cached:number|null;output:number|null;ttft:number|null;peakGpuMiB:number|null}[]};
@@ -212,7 +216,11 @@ export default function Home() {
       document.removeEventListener('visibilitychange',refresh);
     };
   }, [load]);
-  const activitySources = data ? [...(data.combined ? [data.combined] : []), ...data.activity] : [];
+  const liveActivity = data ? [...(data.combined ? [data.combined] : []), ...data.activity] : [];
+  const activitySources = liveActivity.map(source=>{
+    const retained=data?.activityHistory?.find(r=>r.host===source.host);
+    return retained && (period==='all' || (selectedDate && selectedDate<(source.days?.[0]?.date || ''))) ? retained : source;
+  });
   const current = activitySources.find((a) => a.host === host) || activitySources[0];
   const activeDate = selectedDate || current?.days?.at(-1)?.date || '';
   const dailyActivity = current?.days?.find(d => d.date === activeDate);
@@ -222,12 +230,13 @@ export default function Home() {
   }) : [];
   const weeklyCategories: Record<string, number> = {};
   const shownApps: Record<string,Record<string,number>> = {};
-  (period === 'week' ? weekDays.map(d=>d.record) : [dailyActivity]).forEach(record=>Object.entries(record?.apps||{}).forEach(([category,apps])=>{
+  const shownRecords=period==='all'?current?.days||[]:period==='week'?weekDays.map(d=>d.record):[dailyActivity];
+  shownRecords.forEach(record=>Object.entries(record?.apps||{}).forEach(([category,apps])=>{
     shownApps[category] ||= {};
     Object.entries(apps).forEach(([app,n])=>{shownApps[category][app]=(shownApps[category][app]||0)+n;});
   }));
-  weekDays.forEach(({record}) => Object.entries(record?.categories || {}).forEach(([k,v]) => {weeklyCategories[k] = (weeklyCategories[k] || 0) + v;}));
-  const shownCategories = period === 'week' && current?.days ? weeklyCategories : dailyActivity?.categories || (current?.days ? undefined : current?.categories);
+  shownRecords.forEach(record => Object.entries(record?.categories || {}).forEach(([k,v]) => {weeklyCategories[k] = (weeklyCategories[k] || 0) + v;}));
+  const shownCategories = period !== 'day' && current?.days ? weeklyCategories : dailyActivity?.categories || (current?.days ? undefined : current?.categories);
   const earliest = current?.days?.[0]?.date, newest = current?.days?.at(-1)?.date;
   const previousDate = activeDate ? shiftDate(activeDate,period === 'week' ? -7 : -1) : '';
   const nextDate = activeDate ? shiftDate(activeDate,period === 'week' ? 7 : 1) : '';
@@ -352,11 +361,12 @@ export default function Home() {
                     <ToggleGroup value={[period]} onValueChange={v => v[0] && setPeriod(v[0])} aria-label="Activity period" className="period-switch">
                       <ToggleGroupItem value="day">Day</ToggleGroupItem>
                       <ToggleGroupItem value="week">Week</ToggleGroupItem>
+                      <ToggleGroupItem value="all">All time</ToggleGroupItem>
                     </ToggleGroup>
                     <div className="date-navigation">
-                      <Button variant="ghost" aria-label={`Previous ${period}`} disabled={!earliest || previousDate < earliest} onClick={() => setSelectedDate(previousDate)}><ChevronLeft size={18}/></Button>
-                      <span aria-live="polite">{period === 'week' && activeDate ? `${dateLabel(shiftDate(activeDate,-6))} to ${dateLabel(activeDate)}` : dateLabel(activeDate)}</span>
-                      <Button variant="ghost" aria-label={`Next ${period}`} disabled={!newest || nextDate > newest} onClick={() => setSelectedDate(nextDate)}><ChevronRight size={18}/></Button>
+                      <Button variant="ghost" aria-label={`Previous ${period}`} disabled={period==='all'||!earliest || previousDate < earliest} onClick={() => setSelectedDate(previousDate)}><ChevronLeft size={18}/></Button>
+                      <span aria-live="polite">{period==='all'?`${dateLabel(earliest||'')} to ${dateLabel(newest||'')}`:period === 'week' && activeDate ? `${dateLabel(shiftDate(activeDate,-6))} to ${dateLabel(activeDate)}` : dateLabel(activeDate)}</span>
+                      <Button variant="ghost" aria-label={`Next ${period}`} disabled={period==='all'||!newest || nextDate > newest} onClick={() => setSelectedDate(nextDate)}><ChevronRight size={18}/></Button>
                     </div>
                     <small>New York time</small>
                   </div>
@@ -383,12 +393,15 @@ export default function Home() {
                         <span className="device-time">
                           {period === 'day' && a.status === 'ok'
                             ? (sum(a.days?.find(d => d.date === activeDate)?.categories || (a.days ? {} : a.categories)) / 3600).toFixed(1) + 'h'
-                            : period === 'week' && a.status === 'ok' ? '7 days' : 'Unknown'}
+                            : period === 'week' && a.status === 'ok' ? '7 days' : period==='all'&&a.status==='ok'?'Retained':'Unknown'}
                         </span>
                       </TabsTrigger>
                     ))}
                   </TabsList>
                 <TabsContent value={host}>
+                {period==='all' && <p className="quiet-note">All retained daily summaries, up to {current?.maxDates||3650} dates per view. Collection began with the available seven-day window, not the complete ActivityWatch archive. Gaps do not mean idle time.</p>}
+                {current?.latestReadStatus && current.latestReadStatus!=='ok' && <p className="quiet-note">The latest source read failed. Showing retained history as of {current.asOf?new Date(current.asOf).toLocaleString():'an unknown time'}.</p>}
+                {period==='all' && !!current?.days?.length && <details className="receipt-panel"><summary>Browse retained dates</summary><div className="history-dates">{[...current.days].reverse().map(day=><Button key={day.date} variant="ghost" onClick={()=>{setSelectedDate(day.date);setPeriod('day');}}>{day.date} · {day.trackedSeconds===0&&day.seconds===0?'No tracking records':`${time(day.seconds).hours}h ${time(day.seconds).minutes}m`}</Button>)}</div></details>}
                 {period === 'week' && <WeekTimeline key={host} days={weekDays} onOpenDay={date=>{setSelectedDate(date);setPeriod('day');window.scrollTo(0,0);}}/>}
                 {period === 'day' && dailyActivity && <section className="daily-timeline" aria-label="Recorded activity by hour">
                   <div className="hour-track">{dailyActivity.hours.map((n, hour) => <span key={hour}
@@ -409,7 +422,7 @@ export default function Home() {
                         <span>h</span> {clock.minutes}
                         <span>m</span>
                       </div>
-                      <p>{period === 'week' ? 'Recorded in this seven-day window. Coverage may be partial.' : dailyActivity ? `Recorded on ${activeDate}` : 'Across the recorded seven-day window'}</p>
+                      <p>{period==='all'?'Across retained daily summaries. Coverage may be partial.':period === 'week' ? 'Recorded in this seven-day window. Coverage may be partial.' : dailyActivity ? `Recorded on ${activeDate}` : 'Across the recorded seven-day window'}</p>
                       <div
                         className="segmented-track"
                         aria-label="Activity category proportions"

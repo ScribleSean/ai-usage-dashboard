@@ -15,6 +15,7 @@ import { hostname } from 'node:os';
 import { selectActivityPairs } from './activity-buckets.mjs';
 import { readAgentReceipts } from './agent-receipts.mjs';
 export { cleanReceipts } from './agent-receipts.mjs';
+import {previousActivityHistory,retainActivityHistory} from './activity-history.mjs';
 const exec = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const fields = [
@@ -172,6 +173,7 @@ async function guarded(host, fn) {
   }
 }
 export async function collect() {
+  const previousHistory=await previousActivityHistory(path.join(root,'public/local/usage.json'));
   const config = JSON.parse(
     await readFile(path.join(root, 'local.config.json'), 'utf8'),
   );
@@ -270,6 +272,7 @@ export async function collect() {
     localModel,
     settings,
   };
+  data.activityHistory=retainActivityHistory(previousHistory,[combined,...data.activity],data.collectedAt);
   const folder = path.join(root, 'public/local');
   await mkdir(folder, { recursive: true, mode: 0o700 });
   const target = path.join(folder, 'usage.json');

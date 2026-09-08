@@ -135,3 +135,11 @@ body {
     @apply font-sans;
   }
 }
+.history-dates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: 0.5rem;
+  max-height: 24rem;
+  overflow-y: auto;
+  margin-top: 1rem;
+}
