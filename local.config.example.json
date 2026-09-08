@@ -8,5 +8,6 @@
   "ubuntuCodexHome": "/home/YOUR_USER/.codex",
   "codexExecutable": "/absolute/path/to/codex",
   "localModelResults": "/home/YOUR_USER/local-model-lab/results/raw",
-  "receiptDirectory": "/absolute/path/to/review-receipts"
+  "receiptDirectory": "/absolute/path/to/review-receipts",
+  "dictation": { "mac": false, "windows": false }
 }

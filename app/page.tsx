@@ -5,6 +5,7 @@ import { estimate } from '../scripts/api-estimate.mjs';
 import { freshness } from '../scripts/freshness.mjs';
 import WeekTimeline from './week-timeline';
 import ToolDetail from './tool-detail';
+import Dictation, {type DictationSource} from './dictation';
 import { selectTokenDays, aggregateProfiles } from '../scripts/token-periods.mjs';
 import {
   Activity,
@@ -25,6 +26,7 @@ import {
   ChevronRight,
   Sun,
   Moon,
+  Mic,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -74,6 +76,7 @@ type Agent = {
   recordedAt: string;
 };
 type Report = {
+  dictation?:DictationSource[];
   activityHistory?:ActivityRow[];
   agentSource?:{status:string;checkedAt?:string;skipped:number;limited:boolean};
   quota?: {status:string;checkedAt?:string;windows?:{bucket:string;window:string;remainingPercent:number;durationMinutes:number|null;resetsAt:string|null}[]};
@@ -121,6 +124,7 @@ const views = [
   { id: 'activity', label: 'Activity', icon: Activity },
   { id: 'tokens', label: 'Tokens', icon: Layers3 },
   { id: 'agents', label: 'Agents', icon: Workflow },
+  { id: 'dictation', label: 'Dictation', icon: Mic },
   { id: 'sources', label: 'Sources', icon: Database },
 ];
 function State({ children }: { children: React.ReactNode }) {
@@ -253,6 +257,7 @@ export default function Home() {
   const tokenPrevious=tokenAnchor?shiftDate(tokenAnchor,tokenPeriod==='week'?-7:-1):'';
   const tokenNext=tokenAnchor?shiftDate(tokenAnchor,tokenPeriod==='week'?7:1):'';
   const sourceRows = data ? [
+    ...(data.dictation||[]).map(s=>({host:s.host,kind:'TypeWhisper aggregates',status:s.status,checkedAt:s.checkedAt})),
     ...(data.agentSource?[{host:'Local',kind:'Handoff receipts',status:data.agentSource.status,checkedAt:data.agentSource.checkedAt}]:[]),
     ...data.activity.map(a=>({...a,kind:'ActivityWatch'})), ...data.tokens.map(t=>({...t,kind:'Codex logs'})),
     ...(data.quota?[{host:'Codex account',kind:'Limits snapshot',status:data.quota.status,checkedAt:data.quota.checkedAt}]:[]),
@@ -804,6 +809,7 @@ export default function Home() {
                   {data.settings.map(source=><div key={source.host} className="tool-host"><h3>{source.host}</h3>{source.status==='ok'?<ToolDetail rows={source.tools}/>:<p>Unavailable</p>}</div>)}
                 </details>}
               </TabsContent>
+              <TabsContent value="dictation" className="view-panel"><Dictation sources={data.dictation}/></TabsContent>
               <TabsContent value="sources" className="view-panel">
                 <div className="view-heading">
                   <div>

@@ -90,6 +90,20 @@ Git excludes personal configuration, snapshots and generated builds. A generated
 
 Use `npm run serve:local` for viewing. It serves static files on the loopback address and does not run framework server functions. It has no authentication or multi-user support. Read [SECURITY.md](SECURITY.md) for dependency advisories and deployment limits.
 
+## Optional dictation statistics
+
+The Dictation view reads TypeWhisper's retained daily statistics separately from transcript history. Enable either host in the ignored `local.config.json`:
+
+```json
+"dictation": { "mac": true, "windows": true }
+```
+
+Mac reads the dedicated `usage-statistics.store` in TypeWhisper's Application Support folder using read-only SQLite. Windows reads `Data/usage-statistics.json` from the Store or direct-install user data folder through the existing Ubuntu SSH connection and Windows home derived from `windowsCodexHome`. If both stores exist, the source reports ambiguity rather than combining them. This adapter does not install TypeWhisper or enable its transcript history.
+
+Only dates, transcription counts, word counts, recorded audio duration, and fixed engine labels enter the dashboard. App names, custom model names, transcripts, recordings, and credentials are excluded. A missing, invalid, or unsupported store reports unknown usage, not zero. Device-local dates are preserved.
+
+These are retained transcription aggregates, not individual hotkey sessions. Recovery and imported history can contribute. Audio duration includes silence, and failed attempts are not available. Mac and Windows remain separate because imported statistics can overlap. Clearing TypeWhisper statistics also clears what this reader can show. The public demo uses fictional dictation aggregates only.
+
 ## Development
 
 ```sh
@@ -100,7 +114,7 @@ npm run build
 
 Collector tests use synthetic records to check filtering, invalid values and repeated conversation counters. The interface uses React and Vinext with a static export. The local server uses Node's built-in HTTP module.
 
-Hosted CI is not enabled. [ci/check.yml.example](ci/check.yml.example) contains a GitHub Actions workflow that a repository owner can enable with an authorized login.
+The synthetic-demo workflow runs tests, type checking, and a fresh build before publishing to GitHub Pages. It never uploads a workstation build. [ci/check.yml.example](ci/check.yml.example) is a separate example workflow.
 
 The design draws on [lnkiai/m3e-canvas](https://github.com/lnkiai/m3e-canvas), including its Material 3 Expressive navigation, connected controls and tonal surfaces. [Design notes](docs/DESIGN.md) explain how those ideas apply here.
 

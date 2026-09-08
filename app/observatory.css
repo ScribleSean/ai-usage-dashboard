@@ -59,6 +59,19 @@
   --terminal-bg: #233e3b;
   --terminal-ink: #a5d9d1;
 }
+.dictation-controls { display:flex; justify-content:space-between; flex-wrap:wrap; gap:1rem; margin:1.5rem 0; }
+.dictation-controls > div { display:flex; flex-wrap:wrap; gap:.5rem; }
+.dictation-period, .dictation-note { color:var(--m3-secondary); font-size:.875rem; line-height:1.6; }
+.dictation-metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,12rem),1fr)); gap:1rem; margin:1rem 0; }
+.dictation-metrics > div { padding:1.5rem; background:var(--m3-low); border-radius:1.5rem; display:grid; gap:.75rem; }
+.dictation-metrics span { font-size:.875rem; color:var(--m3-secondary); }
+.dictation-metrics strong { font-size:2rem; font-weight:600; }
+.dictation-metrics small { font-size:1rem; }
+.dictation-detail { margin:1.5rem 0; padding:1.25rem; background:var(--m3-low); border-radius:1.5rem; min-width:0; }
+.dictation-detail h2 { font-size:1rem; font-weight:600; margin:0 0 1rem; }
+.dictation-detail ul { display:grid; gap:.75rem; padding:0; list-style:none; }
+.dictation-detail li { display:flex; flex-wrap:wrap; justify-content:space-between; gap:.5rem; font-size:.875rem; }
+.dictation-note p { margin:.75rem 0; }
 .theme-toggle {
   width: 44px !important;
   height: 44px !important;

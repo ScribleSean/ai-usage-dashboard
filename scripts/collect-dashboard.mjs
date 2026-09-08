@@ -11,7 +11,8 @@ import { readSettingsSnapshot } from './settings-snapshot.mjs';
 import { combineTokens, combineSettings } from './combine-tokens.mjs';
 import { randomBytes } from 'node:crypto';
 import { powershellCommand } from './powershell-command.mjs';
-import { hostname } from 'node:os';
+import { hostname, homedir } from 'node:os';
+import { cleanDictation } from './typewhisper.mjs';
 import { selectActivityPairs } from './activity-buckets.mjs';
 import { readAgentReceipts } from './agent-receipts.mjs';
 export { cleanReceipts } from './agent-receipts.mjs';
@@ -248,6 +249,16 @@ export async function collect() {
     return result.settings;
   }):Promise.resolve({host,status:'not-connected'})));
   const receipts = await readAgentReceipts(config.receiptDirectory);
+  const dictationScript = await readFile(path.join(root,'scripts/read-typewhisper.py'),'utf8');
+  const dictation = await Promise.all(['Mac','Windows'].map(host => {
+    const enabled = config.dictation?.[host.toLowerCase()] === true;
+    if (!enabled || (host === 'Windows' && !config.windowsCodexHome)) return {host,status:'not-connected'};
+    return guarded(host,async () => cleanDictation(await pythonReport(
+      host === 'Mac' ? null : config.ubuntuHost,
+      `MODE = '${host.toLowerCase()}'\n` + dictationScript,
+      host === 'Mac' ? homedir() : path.posix.dirname(config.windowsCodexHome),
+    ),host));
+  }));
   const readable = [mac, windows].filter(x => x.status === 'ok' && x.intervals);
   const combined = readable.length === 2 ? (() => {
     const start = new Date(Math.max(...readable.map(x => Date.parse(x.start)))).toISOString();
@@ -270,6 +281,7 @@ export async function collect() {
     agentSource: receipts.source,
     quota,
     localModel,
+    dictation,
     settings,
   };
   data.activityHistory=retainActivityHistory(previousHistory,[combined,...data.activity],data.collectedAt);

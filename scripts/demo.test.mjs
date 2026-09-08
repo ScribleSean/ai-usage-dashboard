@@ -2,10 +2,16 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {demoData} from './demo.mjs';
 import {selectTokenDays} from './token-periods.mjs';
+import {cleanDictation,summarizeDictation} from './typewhisper.mjs';
 test('demo is deterministic and covers every delivered view without live reads',()=>{
   const d=demoData();
   assert.deepEqual(d,demoData());
   assert.equal(d.demo,true);
+  assert.equal(d.dictation.length,2);
+  for (const source of d.dictation) {
+    assert.equal(cleanDictation(source,source.host).status,'ok');
+    assert.ok(summarizeDictation(source).transcriptions>0);
+  }
   assert.equal(d.combinedTokens.status,'ok');
   assert.equal(d.activityHistory[0].days.length,14);
   assert.equal(d.activity[0].days.length,7);
