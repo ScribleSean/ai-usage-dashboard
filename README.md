@@ -2,6 +2,8 @@
 
 A dashboard for tracking app activity and AI usage across a Mac and a Windows PC. It reads existing records from ActivityWatch, Codex and a small set of Antigravity agent runs.
 
+[Try the interactive demo](https://scriblesean.github.io/ai-usage-dashboard/). It uses the same interface with 14 days of fictional records. No personal activity, account data or connected devices are included.
+
 The app runs on your computer. It does not send usage records to a hosted service or make model requests.
 
 ## What you can see
