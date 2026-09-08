@@ -27,6 +27,15 @@ const cases = [
   ['write request', '/', 'POST', {}, 405],
   ['encoded traversal', '/%2e%2e%2flocal.config.json', 'GET', {}, 404],
 ];
+const navigation={'Sec-Fetch-Site':'cross-site','Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'};
+cases.push(
+  ['external dashboard link','/','GET',navigation,200],
+  ['external dashboard head','/','HEAD',navigation,200],
+  ['external private data navigation','/local/usage.json','GET',navigation,403],
+  ['external status navigation','/local/collector.json','GET',navigation,403],
+  ['external frame','/','GET',{...navigation,'Sec-Fetch-Dest':'iframe'},403],
+  ['foreign host navigation','/','GET',{...navigation,Host:'untrusted.example'},403],
+);
 for (const [name, path, method, headers, expected] of cases) {
   const result = await request(path, method, headers);
   assert.equal(result.status, expected, name);

@@ -6,6 +6,10 @@ Install the two generated files in `~/Library/LaunchAgents/` and load them with 
 
 The server and remote listener stay on `127.0.0.1:5601`. No public network listener or billing change is added. These two jobs only serve the existing snapshot.
 
+Once the login jobs are installed, open `http://127.0.0.1:5601/#tokens` in either the Mac browser or the viewing Windows browser. The Windows address reaches the Mac through the private SSH tunnel. Starting Codex is not required and does not itself start these services. They belong to the logged-in Mac session and retry after connectivity returns. Ubuntu supplies configured source data through its existing SSH connection, but the Windows tunnel does not create an Ubuntu localhost listener.
+
+Links from other apps may navigate to the root dashboard document, including its hash-based views. Cross-site fetches, frames and direct navigation to the private JSON routes remain blocked. Hostname checks are unchanged. A Forbidden response should be diagnosed from the request type rather than fixed by removing all cross-site protection or binding the server to the network.
+
 ## Optional automatic collection
 
 Pass `python` as an absolute Python 3 executable path and `collectionIntervalSeconds: 300` to `loginJobs` to generate a third job, `io.ai-usage-dashboard.collector`. It runs on login and at five-minute intervals. Install and bootstrap its property list in the same way. It uses `StartInterval`, not a KeepAlive retry loop. Do not enable a second scheduler for the same collector.

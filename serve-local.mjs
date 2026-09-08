@@ -3,6 +3,7 @@ import http from 'node:http';
 import { readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { allowedLocalRequest } from './scripts/request-policy.mjs';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const assets = path.join(root, 'dist/client');
 const types = {
@@ -21,10 +22,7 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
   res.setHeader('X-Frame-Options', 'DENY');
-  if (
-    !['127.0.0.1:5601', 'localhost:5601'].includes(req.headers.host) ||
-    req.headers['sec-fetch-site'] === 'cross-site'
-  ) {
+  if (!allowedLocalRequest(req)) {
     res.writeHead(403);
     return res.end('Forbidden');
   }
