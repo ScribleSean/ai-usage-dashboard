@@ -4,6 +4,14 @@ The native Windows tray app collects on Windows without a running Mac or open te
 
 This is a development preview. A per-user installer is implemented and tested, but no public binary release is available yet. Windows x64 is the tested build target. Other Windows architectures are not verified.
 
+## First collection
+
+Right-click the Observatory system-tray icon, using the hidden-icons arrow if needed, and choose **Configure local collection**. Confirm local collection and choose whether to include Ubuntu and Wispr. Ubuntu collection starts the installed WSL distribution. Neither optional source nor Mac pairing is required for Windows data.
+
+After collection finishes, choose **Reload snapshot** in the dashboard. Reload reads the saved snapshot. It does not enable or start collection. New source builds show setup instructions when Windows confirms that collection is unconfigured. Older previews can instead show a reload error with an empty dashboard. A configured installation with no readable snapshot still shows a load error rather than being labelled unconfigured.
+
+For renderer verification, `WorkspaceObservatory.exe --test-first-run C:\absolute\path\to\empty-test-runtime` checks the setup instructions. A separate synthetic runtime containing `collector.config.json` but no snapshot checks the load-error state. Both cases passed on the signed-in Windows desktop on September 9. The ordinary `--test-web` check still requires a valid snapshot. These checks do not enable collection or verify the configuration prompts.
+
 ## Build on Windows
 
 Use a Windows-local checkout, .NET 10 SDK, Python 3 with the `py` launcher and PowerShell. From the checkout root:

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { settingsCoverage } from '../scripts/settings-coverage.mjs';
 import { estimate } from '../scripts/api-estimate.mjs';
 import { freshness } from '../scripts/freshness.mjs';
+import { needsWindowsSetup } from '../scripts/setup-state.mjs';
 import WeekTimeline from './week-timeline';
 import ToolDetail from './tool-detail';
 import Dictation, {type DictationSource} from './dictation';
@@ -161,6 +162,7 @@ export default function Home() {
     [error, setError] = useState(false),
     [loading, setLoading] = useState(true);
   const [collector,setCollector] = useState<Collector|null>(null);
+  const [setupRequired,setSetupRequired] = useState(false);
   const [now,setNow] = useState(0);
   const inFlight = useRef(false);
   const [view, setView] = useState('activity'),
@@ -176,11 +178,13 @@ export default function Home() {
     inFlight.current = true;
     if (!silent) setLoading(true);
     try {
-      const [r,status] = await Promise.all([
-        fetch('./local/usage.json', { cache: 'no-store', signal:AbortSignal.timeout(10000) }),
+      const [r,status,setup] = await Promise.all([
+        fetch('./local/usage.json', { cache: 'no-store', signal:AbortSignal.timeout(10000) }).catch(()=>null),
         fetch('./local/collector.json', { cache: 'no-store', signal:AbortSignal.timeout(10000) }).then(async r=>r.ok?await r.json() as Collector:null).catch(()=>null),
+        fetch('./local/setup.json', { cache: 'no-store', signal:AbortSignal.timeout(10000) }).then(async r=>r.ok?await r.json():null).catch(()=>null),
       ]);
-      if (!r.ok) throw Error();
+      setSetupRequired(needsWindowsSetup(setup));
+      if (!r?.ok) throw Error();
       const v = (await r.json()) as Report;
       if (
         !v ||
@@ -340,7 +344,7 @@ export default function Home() {
           {data && !data.demo && !error && (snapshotAge.state==='stale' || collector?.state==='failed' || (collector?.state==='running' && !collectorRunning)) && <p className="error-banner" role="status">
             {collector?.state==='failed'?'The last collection failed. Showing the most recent saved snapshot.':collector?.state==='running'&&!collectorRunning?'Collection has not reported completion. The saved snapshot may be out of date.':'This snapshot is over 10 minutes old. The collector may be stopped or the hosting Mac asleep.'}
           </p>}
-          {error && (
+          {error && !(setupRequired && !data) && (
             <p className="error-banner" role="alert">
               Could not reload.{' '}
               {data
@@ -352,6 +356,7 @@ export default function Home() {
             <State>
               {loading
                 ? 'Reading your local snapshot…'
+                : setupRequired ? 'Set up Windows collection to create your first snapshot. Right-click the Observatory system-tray icon (check the hidden-icons arrow), then choose Configure local collection. Ubuntu and Wispr are optional. After collection finishes, choose Reload snapshot. Mac pairing is not required.'
                 : 'No snapshot available yet.'}
             </State>
           ) : (

@@ -30,10 +30,10 @@ internal static class Program
             return;
         }
         ApplicationConfiguration.Initialize();
-        if (args.Length == 2 && args[0] == "--test-web")
+        if (args.Length == 2 && args[0] is "--test-web" or "--test-first-run")
         {
             if (!Path.IsPathFullyQualified(args[1]) || !Directory.Exists(args[1])) { Environment.ExitCode = 1; return; }
-            Application.Run(new Dashboard(args[1], smokeTest: true));
+            Application.Run(new Dashboard(args[1], smokeTest: true, firstRunTest: args[0] == "--test-first-run"));
             return;
         }
         using var singleton = new Mutex(true, "Local\\WorkspaceObservatory", out var first);

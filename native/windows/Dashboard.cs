@@ -10,11 +10,13 @@ internal sealed class Dashboard : Form
     private readonly WebView2 web = new() { Dock = DockStyle.Fill, DefaultBackgroundColor = Color.FromArgb(9, 9, 11) };
     private readonly string runtime;
     private readonly bool smokeTest;
+    private readonly bool firstRunTest;
 
-    internal Dashboard(string runtime, bool smokeTest = false)
+    internal Dashboard(string runtime, bool smokeTest = false, bool firstRunTest = false)
     {
         this.runtime = runtime;
         this.smokeTest = smokeTest;
+        this.firstRunTest = firstRunTest;
         Text = "Workspace Observatory";
         Size = new Size(1150, 770);
         MinimumSize = new Size(800, 550);
@@ -61,6 +63,20 @@ internal sealed class Dashboard : Form
                     if (IsDisposed) return;
                     var ready = await core.ExecuteScriptAsync("Boolean(window.observatoryBundleReady && document.body.innerText.includes('Workspace Observatory'))");
                     if (ready != "true") continue;
+                    if (firstRunTest)
+                    {
+                        if (File.Exists(Path.Combine(runtime, "public", "local", "usage.json"))) break;
+                        var configured = File.Exists(Path.Combine(runtime, "collector.config.json"));
+                        var expected = configured
+                            ? "document.body.innerText.includes('Could not reload.') && !document.body.innerText.includes('Set up Windows collection')"
+                            : "document.body.innerText.includes('Set up Windows collection') && !document.body.innerText.includes('Could not reload.')";
+                        for (var poll = 0; poll < 60 && !IsDisposed; poll++)
+                        {
+                            if (await core.ExecuteScriptAsync(expected) == "true") { passed = true; break; }
+                            await Task.Delay(200);
+                        }
+                        break;
+                    }
                     // ExecuteScriptAsync does not await promises. Verify fetch through a completion flag.
                     await core.ExecuteScriptAsync("window.__observatoryTest = null; fetch('/local/usage.json').then(r => { if (!r.ok) throw Error(); return r.json(); }).then(d => { window.__observatoryTest = Boolean(d && d.schema === 2 && Array.isArray(d.tokens)); }).catch(() => { window.__observatoryTest = false; });");
                     for (var poll = 0; poll < 25 && !IsDisposed; poll++)
@@ -126,6 +142,13 @@ internal sealed class Dashboard : Form
             var uri = new Uri(e.Request.Uri);
             var relative = Uri.UnescapeDataString(uri.AbsolutePath).TrimStart('/');
             if (relative.Length == 0) relative = "index.html";
+            if (relative == "local/setup.json")
+            {
+                var configured = File.Exists(Path.Combine(runtime, "collector.config.json"));
+                var json = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new { version = 1, platform = "windows", configured });
+                e.Response = environment.CreateWebResourceResponse(new MemoryStream(json), 200, "OK", "Content-Type: application/json\r\n" + policy);
+                return;
+            }
             string file;
             if (relative is "local/usage.json" or "local/collector.json")
                 file = Path.Combine(runtime, "public", relative.Replace('/', Path.DirectorySeparatorChar));
