@@ -1,36 +1,35 @@
-# Portfolio release checklist
+# Desktop release checklist
 
-The next release should be easy to try without personal accounts and clear about what its data means. Keep the existing Material 3 Expressive design and local execution model.
+Status reviewed September 9, 2026. A passing development-machine test is not a clean-install result. This checklist tracks the requested desktop release, not every future integration in the [roadmap](ROADMAP.md).
 
-## Verified foundation
+## Verified preparation
 
-- Synthetic demo with no required AI account.
-- Separate activity, token, agent and source views.
-- Private configuration and generated data excluded from Git.
-- Collector tests for invalid metrics, private fields and repeated counters.
-- Device selectors own their result panels.
-- Copy regression test for the no-em-dash rule.
-- Seven local-server checks pass for successful reads, request restrictions and security headers. These checks do not constitute a complete security audit.
+| Area | Evidence and boundary |
+| --- | --- |
+| Source and demo | Reviewed source is synced to GitHub and the Windows build checkout. Hosted CI runs tests, TypeScript, the synthetic demo and production build. Public demo records are fictional. |
+| Mac app | Self-contained Apple Silicon build, nested signatures, bundled-collector test, WebKit bridge and three window open/close cycles pass. The lifecycle check verifies web-view deallocation, not total helper memory. |
+| Mac ZIP | Clean-source candidate `eecc330` passed full-file inventory, privacy checks, signature verification, ZIP extraction and relocated runtime/lifecycle tests. About 60 MiB compressed. Ad hoc signed, not notarized. |
+| Mac deployment targets | The app declares macOS 14.0; its eleven bundled runtime binaries declare macOS 11.0. This is binary-header evidence, not a test on macOS 14. |
+| Windows package | Clean-source candidate `d3019cf` passed native/runtime checks and all 996 payload hashes. About 224 MiB unpacked. Uses the system WebView2 runtime. |
+| Windows installer | An unsigned installer and checksum were prepared. Its isolated test identity passed install, shortcut, payload, overwrite-refusal, linked-directory, uninstall, reinstall and data-preservation checks. The ordinary installer has not been installed or published. |
+| Native source reads | Packaged development checks read Mac ActivityWatch, Codex, Wispr and TypeWhisper metadata; Windows checks read local ActivityWatch, Codex, Wispr and optional Ubuntu Codex records. These are one-setup checks with explicit unavailable states. |
+| Aggregation | Tests cover overlapping intervals, repeated records, local midnight, daylight saving time, invalid/missing hosts and private-field filtering. Cross-host token overlap blocks combined totals instead of guessing. |
 
-## Remaining release gates
+Binary candidates retain their embedded source revisions even when later source-only changes are synced. Never relabel an older artifact as a newer build. Rebuild and reverify affected binaries before final publication.
 
-The September 6 activity update adds overlap-safe combined time, daily hourly buckets and separate AI-app/editor categories. Synthetic tests cover duplicates, overlapping categories, clipping, local midnight and fall daylight saving time. Four observed data sources refreshed successfully. Native Windows token logs remain explicitly disconnected.
+## Required release gates still open
 
-## Pending data coverage
+- **Private connection:** settle the first-release sync direction, implement the agreed path using the existing authenticated route or optional Tailscale, and test disconnection, reconnection, repeated transfers, overlap handling and revocation. Preserve the working legacy collector until its replacement is verified.
+- **Mac DMG:** complete creation, integrity, read-only mount and content checks. A development attempt stalled in macOS authorization. ZIP verification does not satisfy this gate, and system protections must not be disabled.
+- **Clean environment:** verify installation and first launch without development dependencies. Exercise the documented supported OS/runtime prerequisites and disclose untested versions.
+- **Lifecycle:** verify actual login startup and sleep/wake, idle and collection resource use, and orderly shutdown on both platforms. A short all-sources-disabled Mac baseline was about 69 MiB for the native process only; it does not establish normal collection cost or total WebKit memory.
+- **Migration:** exercise the installed app's settings preservation, version update, rollback and uninstall. The Windows isolated test covers same-schema reinstall, not every future migration. Do not overwrite the owner's working installation to claim this gate.
+- **Interface:** finish all-view, keyboard, narrow-layout and enlarged-text checks in the native renderers. A rendered view or source-level test is not a full accessibility review.
+- **Security review:** review current dependency advisories and actual exposure, verify final artifact privacy and integrity, and disclose unsigned/unnotarized warnings. Do not call the app vulnerability-free.
+- **Publication:** publish versioned artifacts, checksums, changelog and accurate download links only after the applicable gates pass. Keep the README concise and detailed instructions in this folder. Use synthetic data for screenshots or a later demonstration video.
 
-- Connect native Windows token records after checking available logs and avoiding mirrored-session double counting.
-- Add Google and Anthropic API-equivalent estimates only after receipt token semantics and exact model mappings are verified. The current comparison covers selected OpenAI models, not all usage.
-- Import new local-helper and external-agent receipts through a reusable configured adapter. Preserve historical failures even when a later check succeeds.
-- Track quota/reset data only through a supported source. Do not infer remaining allowance from tokens.
-- Keep SSH/tool history, iPhone activity and Gemini website activity on the roadmap. These do not block a usable first dashboard release.
+## Later coverage, not claims of this release
 
-## Release checks
+Broader providers, other-provider quota, general shell/SSH history, iPhone activity, standalone Linux UI and optional request routing remain roadmap work. They need their own supported sources, privacy boundaries and verification. Token counts are not subscription charges, and a router only observes traffic explicitly sent through it.
 
-1. Browser interaction checks for all views, device selection, keyboard focus, narrow layouts and enlarged text. Source-level tests do not establish browser accessibility.
-2. Reproduce the README demo from a clean checkout without touching the owner's snapshot.
-3. Extend local-server checks as new endpoints or capabilities are added.
-4. Review remaining dependency advisories and document actual exposure. Do not call the app vulnerability-free.
-5. Enable hosted CI through an appropriately authorized GitHub login. The example workflow is not active CI.
-6. Add a screenshot using synthetic data only after the interface checks pass.
-
-Do not publish a hosted copy containing personal data. Quota coverage, broader agent receipts and command history are later data-adapter work, not claims of this release.
+See [source coverage](SOURCE-COVERAGE.md), [Mac verification](MAC.md) and [Windows verification](WINDOWS.md) for measurement limits and commands.
