@@ -1,4 +1,14 @@
-# Login startup on macOS
+# Startup
+
+## Native desktop apps
+
+The native Mac app uses its **Launch at login** control and macOS login-item registration. Its collector runs inside the app, so it does not need the legacy dashboard server or a separate collector LaunchAgent. Do not enable two collection schedulers for the same runtime.
+
+The Windows tray preview has an opt-in **Register start at login** control. See [Windows development and startup](WINDOWS.md) for prerequisites, limitations and remaining verification.
+
+## Legacy macOS web dashboard
+
+The following instructions apply to the optional web-server workflow, not the native apps.
 
 The dashboard server and an optional private SSH tunnel can run as per-user LaunchAgents. `scripts/login-jobs.mjs` creates property-list strings from an absolute repository path, a stable Node executable path, and the viewing computer's SSH alias. Generated machine-specific files belong outside Git.
 

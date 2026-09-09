@@ -144,7 +144,7 @@ def collect(folder):
             inventory['status'] = 'incomplete'
             continue
         info = file.stat()
-        with file.open() as stream:
+        with file.open(encoding='utf-8') as stream:
             first = stream.readline(1_000_000)
         try:
             meta = json.loads(first)
@@ -169,7 +169,7 @@ def collect(folder):
     profiles, tools = {}, {}
     for file, _ in sessions.values():
         def events():
-            with file.open() as stream:
+            with file.open(encoding='utf-8') as stream:
                 for line in stream:
                     if len(line) > 8_000_000:
                         continue

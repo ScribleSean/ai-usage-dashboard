@@ -43,3 +43,6 @@ next-env.d.ts
 __pycache__/
 *.pyc
 /.native-build/
+/native/windows/bin/
+/native/windows/obj/
+/native/windows/release/

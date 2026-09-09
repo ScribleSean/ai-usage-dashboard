@@ -30,7 +30,7 @@ Missing data stays missing. Estimates stay labeled. Token counts are not subscri
 
 - **Native Mac menu bar.** SwiftUI panel, system WebKit detail window, launch at login and automatic refresh. No manually started web server or bundled Chromium engine.
 - **Your data stays yours.** No required hosted account. The dashboard retains allowlisted usage metadata, not prompts, transcripts, recordings or credentials.
-- **One view across your setup.** The current Mac collector can read configured Windows and Ubuntu sources over SSH. Independent Windows collection and optional device sync are next.
+- **One view across your setup.** The Mac collector can read configured Windows and Ubuntu sources over SSH. A Windows tray preview now collects locally. Optional device sync is still planned.
 - **Inspectable by design.** Source health, freshness, tests and measurement limits are part of the product, not hidden behind a total.
 
 ## Try it
@@ -42,7 +42,7 @@ The project is an early preview tested on one Mac, Windows and WSL setup. The Ma
 | Platform | Current status |
 | --- | --- |
 | macOS, Apple Silicon | Native app implemented. Source build and locally signed installation. |
-| Windows | Remote data sources supported. Native tray app and installer planned. |
+| Windows x64 | Native tray preview with local collection and WebView2 dashboard. [Source build](docs/WINDOWS.md). Installer pending. |
 | Ubuntu / WSL | Configured token and workflow sources. Standalone desktop app planned. |
 
 Read the [setup and development guide](docs/GUIDE.md) or check the [integration coverage](docs/SOURCE-COVERAGE.md) before connecting your records.
