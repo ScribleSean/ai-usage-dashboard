@@ -59,14 +59,16 @@ test('Mac package inspection rejects private filenames and encoded build paths',
   });
 });
 
-test('Mac package inspection rejects private quota directories and journal fragments',()=>{
+test('Mac package inspection rejects private quota and repair directories and journal fragments',()=>{
   fixture(({bundle})=>{
     const resources=path.join(bundle,'Contents/Resources');
-    const directory=path.join(resources,'private-quota');
-    mkdirSync(directory);
-    writeFileSync(path.join(directory,'orphan.txt'),'synthetic private canary');
-    assert.throws(()=>inspectMacPackage(bundle),/Private/);
-    rmSync(directory,{recursive:true});
+    for(const name of ['private-quota','private-repair']) {
+      const directory=path.join(resources,name);
+      mkdirSync(directory);
+      writeFileSync(path.join(directory,'orphan.txt'),'synthetic private canary');
+      assert.throws(()=>inspectMacPackage(bundle),/Private/);
+      rmSync(directory,{recursive:true});
+    }
     const journal=path.join(resources,'state.sqlite-journal');
     writeFileSync(journal,'synthetic private canary');
     assert.throws(()=>inspectMacPackage(bundle),/Private/);

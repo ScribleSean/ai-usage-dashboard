@@ -1,5 +1,5 @@
 const forbiddenNames=new Set(['usage.json','collector.json','collector.config.json','local.config.json','.env','__pycache__','webviewcache','node_modules','.git',
-  'private-quota','private-codex','private-sync']);
+  'private-quota','private-codex','private-sync','private-repair']);
 
 export function forbiddenPackageName(name) {
   return forbiddenNames.has(name.toLowerCase()) || /\.(pdb|jsonl|(?:sqlite3?|db)(?:-wal|-shm|-journal)?)$/i.test(name) ||

@@ -7,7 +7,7 @@ test('package guard rejects private data, cache and debug names without dependin
   for(const name of ['LICENSE.txt','node.exe','python313.zip','package-manifest.json'])assert.equal(forbiddenPackageName(name),false,name);
 });
 test('package guard rejects private runtime directories and detached SQLite sidecars',()=>{
-  for(const name of ['private-quota','PRIVATE-QUOTA','private-codex','private-sync','private-sync-retired-fixture',
+  for(const name of ['private-quota','PRIVATE-QUOTA','private-codex','private-sync','private-repair','PRIVATE-REPAIR','private-sync-retired-fixture',
     'state.sqlite-wal','state.sqlite-shm','state.sqlite-journal','cache.SQLITE3-WAL','cache.db-journal'])
     assert.equal(forbiddenPackageName(name),true,name);
   for(const name of ['quota-store.mjs','private-sync-acl.ps1','_sqlite3.so','sqlite3.dll','state-machine.js'])

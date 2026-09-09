@@ -29,6 +29,7 @@ test('Windows manifests reject quota journals even when their checksum and inven
   manifest.files[0].path='state.sqlite-wal';save();
   assert.throws(()=>verifyManifest(root),/Invalid manifest file entry/);
   assert.equal(validPackagePath('Web/assets/private-quota/retained.txt'),false);
+  assert.equal(validPackagePath('Web/assets/private-repair/prepared.json'),false);
   assert.equal(validPackagePath('Resources/private-sync-retired-fixture/retained.txt'),false);
 }));
 test('dirty source requires an explicit development option',()=>fixture((root,manifest,save)=>{
