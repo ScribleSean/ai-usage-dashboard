@@ -344,7 +344,7 @@ export default function Home() {
               Could not reload.{' '}
               {data
                 ? 'Showing the previous snapshot.'
-                : 'Run npm run collect, then reload.'}
+                : 'Refresh sources on the collecting device, then reload.'}
             </p>
           )}
           {!data ? (
@@ -710,7 +710,7 @@ export default function Home() {
                     {latest?.models
                       .map((m) => m.model + (m.inferred ? ' (inferred)' : ''))
                       .join(', ') || 'No model records'}
-                    . Totals are reported by ccusage. Cached tokens can
+                    . Totals come from saved Codex usage records. Cached tokens can
                     dominate. All combines these three Codex log sources only after a cross-host session and parent-link overlap check. If overlap is detected, the combined total is withheld. This does not prove the underlying provider logs capture every request.
                     These are the latest recorded dates, which may have gaps. API comparisons are hypothetical and partial, not actual spending or remaining quota.
                   </p>
@@ -870,7 +870,7 @@ export default function Home() {
                 <details className="method-note">
                   <summary>Refresh & privacy</summary>
                   <p>
-                    Manual collection uses <code>npm run collect</code>. An optional login job collects every five minutes. Overlapping runs are skipped, and a run is limited to four minutes. The page retains its last snapshot if a reload fails. Personal config and data are
+                    Collection runs on the collecting device, not in this page. The desktop app provides Refresh sources and optional launch at login. Overlapping runs are skipped, and a run is limited to four minutes. The page retains its last snapshot if a reload fails. Personal config and data are
                     excluded from the public repo. Raw titles, prompts, commands
                     and credentials are never stored here.
                   </p>

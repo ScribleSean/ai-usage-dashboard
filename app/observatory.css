@@ -80,6 +80,7 @@
   border-radius: 50% !important;
   background: var(--m3-low) !important;
   color: var(--m3-ink) !important;
+  transition: none !important;
 }
 button:focus-visible {
   outline: 3px solid var(--m3-primary);
@@ -179,9 +180,7 @@ summary:focus-visible {
   background: var(--m3-low) !important;
   color: var(--m3-ink) !important;
   gap: 8px !important;
-  transition:
-    background 120ms,
-    transform 120ms;
+  transition: none !important;
 }
 .workspace-tabs {
   display: grid !important;
