@@ -45,8 +45,9 @@ final class SnapshotBridge: NSObject, WKScriptMessageHandlerWithReply {
                                replyHandler: @escaping (Any?, String?) -> Void) {
         let origin = message.frameInfo.securityOrigin
         guard message.frameInfo.isMainFrame, origin.protocol == "observatory", origin.host == "app",
-              let name = message.body as? String, ["usage", "collector"].contains(name),
-              let object = readObject(runtime.appendingPathComponent("public/local/\(name).json")) else {
+              let name = message.body as? String,
+              let file = dashboardSnapshotURL(runtime: runtime, name: name),
+              let object = readObject(file) else {
             replyHandler(nil, "Local snapshot unavailable")
             return
         }

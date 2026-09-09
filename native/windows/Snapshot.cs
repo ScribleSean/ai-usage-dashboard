@@ -6,6 +6,31 @@ internal static class Snapshot
 {
     internal const int MaxBytes = 16_000_000;
 
+    internal static string? DashboardFile(string runtime, string name)
+    {
+        if (name is not ("usage.json" or "collector.json")) return null;
+        return UnlinkedFile(runtime, "public/local/" + name);
+    }
+
+    internal static string? UnlinkedFile(string root, string relative)
+    {
+        try
+        {
+            var components = relative.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
+            if (Path.IsPathRooted(relative) || relative.Contains(':') || components.Any(part => part is "." or "..")) return null;
+            var file = Path.GetFullPath(root);
+            if (File.GetAttributes(file).HasFlag(FileAttributes.ReparsePoint)) return null;
+            foreach (var component in components)
+            {
+                file = Path.Combine(file, component);
+                var entry = file;
+                if (File.GetAttributes(entry).HasFlag(FileAttributes.ReparsePoint)) return null;
+            }
+            return file;
+        }
+        catch { return null; }
+    }
+
     internal static JsonObject? Read(string file)
     {
         try

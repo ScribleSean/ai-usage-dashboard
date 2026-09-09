@@ -78,7 +78,7 @@ internal sealed class Dashboard : Form
                         break;
                     }
                     // ExecuteScriptAsync does not await promises. Verify fetch through a completion flag.
-                    await core.ExecuteScriptAsync("window.__observatoryTest = null; fetch('/local/usage.json').then(r => { if (!r.ok) throw Error(); return r.json(); }).then(d => { window.__observatoryTest = Boolean(d && d.schema === 2 && Array.isArray(d.tokens)); }).catch(() => { window.__observatoryTest = false; });");
+                    await core.ExecuteScriptAsync("window.__observatoryTest = null; (async () => { const r = await fetch('/local/usage.json'); if (!r.ok) throw Error(); const d = await r.json(); for (const path of ['/private-sync/pairing.json', '/private-sync/setup.pending.json', '/assets/private-sync/setup.pending.json', '/assets/private-linked/secret.js', '/assets/%2e%2e/private-sync/pairing.json', '/local/../private-sync/setup.pending.json']) { try { const blocked = await fetch(path); if (blocked.ok) throw Error('Unexpected private route'); } catch (e) { if (e.message === 'Unexpected private route') throw e; } } return Boolean(d && d.schema === 2 && Array.isArray(d.tokens)); })().then(ok => { window.__observatoryTest = ok; }).catch(() => { window.__observatoryTest = false; });");
                     for (var poll = 0; poll < 25 && !IsDisposed; poll++)
                     {
                         await Task.Delay(200);
@@ -151,12 +151,13 @@ internal sealed class Dashboard : Form
             }
             string file;
             if (relative is "local/usage.json" or "local/collector.json")
-                file = Path.Combine(runtime, "public", relative.Replace('/', Path.DirectorySeparatorChar));
+                file = Snapshot.DashboardFile(runtime, relative[6..]) ?? throw new InvalidOperationException();
             else
             {
                 if (relative != "index.html" && !relative.StartsWith("assets/", StringComparison.Ordinal)) throw new InvalidOperationException();
+                if (Path.GetExtension(relative).Equals(".json", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException();
                 if (relative.Contains('\\') || relative.Contains(':') || relative.Contains('\0') || relative.Split('/').Contains("..")) throw new InvalidOperationException();
-                file = Path.Combine(AppContext.BaseDirectory, "Web", relative.Replace('/', Path.DirectorySeparatorChar));
+                file = Snapshot.UnlinkedFile(Path.Combine(AppContext.BaseDirectory, "Web"), relative) ?? throw new InvalidOperationException();
             }
             var info = new FileInfo(file);
             if (!info.Exists || info.Length > Snapshot.MaxBytes || info.Attributes.HasFlag(FileAttributes.ReparsePoint)) throw new InvalidOperationException();

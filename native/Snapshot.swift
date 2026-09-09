@@ -20,6 +20,14 @@ func readObject(_ url: URL) -> JSONObject? {
     return value
 }
 
+func dashboardSnapshotURL(runtime: URL, name: String) -> URL? {
+    guard ["usage", "collector"].contains(name) else { return nil }
+    let base = runtime.standardizedFileURL.resolvingSymlinksInPath()
+    let file = base.appendingPathComponent("public/local/\(name).json").standardizedFileURL
+    guard file.resolvingSymlinksInPath().path == file.path else { return nil }
+    return file
+}
+
 func parseDate(_ value: Any?) -> Date? {
     guard let value = value as? String else { return nil }
     let formatter = ISO8601DateFormatter()
@@ -76,12 +84,13 @@ struct AssetResolver {
         guard url.scheme == "observatory", url.host == "app", url.user == nil, url.password == nil,
               url.port == nil else { return nil }
         let path = url.path == "/" || url.path.isEmpty ? "index.html" : String(url.path.dropFirst())
+        guard path == "index.html" || path.hasPrefix("assets/") else { return nil }
         guard !path.split(separator: "/").contains(".."), !path.contains("\\"),
               !path.contains("\0"), !path.hasPrefix("local/"), !path.hasPrefix(".") else { return nil }
         let base = root.standardizedFileURL.resolvingSymlinksInPath()
         let file = base.appendingPathComponent(path).standardizedFileURL.resolvingSymlinksInPath()
         guard file.path.hasPrefix(base.path + "/"),
-              ["html", "js", "css", "svg", "png", "ico", "woff2", "woff", "json"].contains(file.pathExtension) else { return nil }
+              ["html", "js", "css", "svg", "png", "ico", "woff2", "woff", "txt"].contains(file.pathExtension) else { return nil }
         return file
     }
 }
