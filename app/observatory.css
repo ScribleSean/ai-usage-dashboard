@@ -276,6 +276,11 @@ summary:focus-visible {
   font-size: 1rem !important;
   flex: 1;
 }
+/* Inactive panels are inert before the primitive finishes unmounting them.
+   Hide them immediately, including when a webview delays transition completion. */
+.workspace-tabs [data-slot='tabs-content'][inert] {
+  display: none !important;
+}
 .view-heading {
   display: flex;
   align-items: center;
