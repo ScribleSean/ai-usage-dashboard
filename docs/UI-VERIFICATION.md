@@ -18,9 +18,14 @@ The checks used an isolated `--preview --show` launch with collection sources di
 
 The tab wrapper previously styled a vertical rail without forwarding its orientation to the underlying component. It now forwards that property. The Mac renderer smoke test checks the actual desktop tablist's `aria-orientation`, after allowing React to mount. Inactive panels are explicitly hidden while the tab component finishes its unmount transition.
 
+## Selection follow-up, candidate `4731c97`
+
+The visual rail highlight remained on Activity after switching views in the earlier preview, including with direct clicks and after raising the window. Tab-selection color transitions are now disabled, so selection feedback does not depend on animation progress. In the rebuilt Mac preview, Sources and Tokens highlighted correctly, and the horizontal Mac token tab matched its selected accessibility state. Right and Enter activation also remained functional.
+
+The same check exposed Windows-specific disconnected-source text in the Mac token view. The message is now source-neutral and was verified in the native Mac preview. Both UI builds and the Mac signature, self-test, bundled-collector, WebKit and window-lifecycle checks passed for this candidate. These fixes do not change collection settings or install a new version over the working app.
+
 ## Still open
 
-- The visual rail highlight can remain on Activity while the accessibility tree and displayed content select another view. This was observed in native preview captures, including after raising the window. Investigate selected-state styling and native rendering before calling navigation visually complete.
 - Check populated synthetic records, expanded details, complete keyboard focus order, both themes and 200% text enlargement.
 - Repeat the interaction and layout checks in Windows WebView2. A Windows web build does not prove Windows-native interaction behavior.
 - Verify the final packaged release, not only this development candidate. Existing ZIP and installer artifacts retain their earlier revisions and do not contain these UI fixes.
