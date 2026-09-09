@@ -7,6 +7,7 @@ import WeekTimeline from './week-timeline';
 import ToolDetail from './tool-detail';
 import Dictation, {type DictationSource} from './dictation';
 import { selectTokenDays, aggregateProfiles } from '../scripts/token-periods.mjs';
+import telescopeMark from '../public/brand/telescope.svg';
 import {
   Activity,
   Layers3,
@@ -136,20 +137,18 @@ function State({ children }: { children: React.ReactNode }) {
   );
 }
 export default function Home() {
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(true);
   useEffect(() => {
-    const query = matchMedia('(prefers-color-scheme: dark)');
     const sync = () => {
       let saved: string | null = null;
       try { saved = localStorage.getItem('usage-theme'); } catch {}
-      const next = saved === 'dark' || (saved !== 'light' && query.matches);
+      const next = saved !== 'light';
       document.documentElement.dataset.theme = next ? 'dark' : 'light';
       setDark(next);
     };
     sync();
-    query.addEventListener('change', sync);
     window.addEventListener('storage', sync);
-    return () => { query.removeEventListener('change', sync); window.removeEventListener('storage', sync); };
+    return () => { window.removeEventListener('storage', sync); };
   }, []);
   const toggleTheme = () => {
     const next = !dark;
@@ -257,7 +256,7 @@ export default function Home() {
   const tokenPrevious=tokenAnchor?shiftDate(tokenAnchor,tokenPeriod==='week'?-7:-1):'';
   const tokenNext=tokenAnchor?shiftDate(tokenAnchor,tokenPeriod==='week'?7:1):'';
   const sourceRows = data ? [
-    ...(data.dictation||[]).map(s=>({host:s.host,kind:'TypeWhisper aggregates',status:s.status,checkedAt:s.checkedAt})),
+    ...(data.dictation||[]).map(s=>({host:s.host,kind:`${s.source || 'TypeWhisper'} aggregates`,status:s.status,checkedAt:s.checkedAt})),
     ...(data.agentSource?[{host:'Local',kind:'Handoff receipts',status:data.agentSource.status,checkedAt:data.agentSource.checkedAt}]:[]),
     ...data.activity.map(a=>({...a,kind:'ActivityWatch'})), ...data.tokens.map(t=>({...t,kind:'Codex logs'})),
     ...(data.quota?[{host:'Codex account',kind:'Limits snapshot',status:data.quota.status,checkedAt:data.quota.checkedAt}]:[]),
@@ -277,10 +276,10 @@ export default function Home() {
       <header className="app-bar">
         <div className="wordmark">
           <span className="brand-mark" aria-hidden="true">
-            u
+            <img src={telescopeMark} width="28" height="28" alt=""/>
           </span>
           <span>
-            Usage<span className="wordmark-detail"> / workspace</span>
+            <span className="wordmark-detail">Workspace </span>Observatory
           </span>
         </div>
         <div className="app-actions">
@@ -882,7 +881,7 @@ export default function Home() {
           <footer>
             <span>{data?.demo?'Synthetic data only. No personal activity or account records.':'Saved records stay on the dashboard host.'}</span>
             <a
-              href="https://github.com/ScribleSean/ai-usage-dashboard"
+              href="https://github.com/ScribleSean/workspace-observatory"
               target="_blank"
               rel="noreferrer"
             >

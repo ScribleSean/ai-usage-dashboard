@@ -13,6 +13,7 @@ import { randomBytes } from 'node:crypto';
 import { powershellCommand } from './powershell-command.mjs';
 import { hostname, homedir } from 'node:os';
 import { cleanDictation } from './typewhisper.mjs';
+import { cleanWispr } from './wispr.mjs';
 import { selectActivityPairs } from './activity-buckets.mjs';
 import { readAgentReceipts } from './agent-receipts.mjs';
 export { cleanReceipts } from './agent-receipts.mjs';
@@ -250,15 +251,19 @@ export async function collect() {
   }):Promise.resolve({host,status:'not-connected'})));
   const receipts = await readAgentReceipts(config.receiptDirectory);
   const dictationScript = await readFile(path.join(root,'scripts/read-typewhisper.py'),'utf8');
-  const dictation = await Promise.all(['Mac','Windows'].map(host => {
+  const wisprScript = await readFile(path.join(root,'scripts/read-wispr.py'),'utf8');
+  const dictation = await Promise.all(['Wispr Flow','TypeWhisper'].flatMap(source => ['Mac','Windows'].map(async host => {
     const enabled = config.dictation?.[host.toLowerCase()] === true;
-    if (!enabled || (host === 'Windows' && !config.windowsCodexHome)) return {host,status:'not-connected'};
-    return guarded(host,async () => cleanDictation(await pythonReport(
-      host === 'Mac' ? null : config.ubuntuHost,
-      `MODE = '${host.toLowerCase()}'\n` + dictationScript,
+    if (!enabled || (host === 'Windows' && !config.windowsCodexHome)) return {host,source,status:'not-connected'};
+    const nativeWindows = host === 'Windows' && source === 'Wispr Flow';
+    const result = await guarded(host,async () => (source === 'Wispr Flow' ? cleanWispr : cleanDictation)(await pythonReport(
+      host === 'Mac' ? null : nativeWindows ? config.windowsHost : config.ubuntuHost,
+      `MODE = '${host.toLowerCase()}'\n` + (source === 'Wispr Flow' ? wisprScript : dictationScript),
       host === 'Mac' ? homedir() : path.posix.dirname(config.windowsCodexHome),
+      {nativeWindows},
     ),host));
-  }));
+    return {...result,source};
+  })));
   const readable = [mac, windows].filter(x => x.status === 'ok' && x.intervals);
   const combined = readable.length === 2 ? (() => {
     const start = new Date(Math.max(...readable.map(x => Date.parse(x.start)))).toISOString();

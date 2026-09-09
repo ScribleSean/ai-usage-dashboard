@@ -1,42 +1,35 @@
-# Dashboard delivery checklist
+# Roadmap
 
-This checklist tracks requested dashboard outcomes. Completed items have implementation and verification. Open items are not claims of supported functionality.
+Workspace Observatory is building toward one trustworthy view of screen time and AI usage across devices. The first audience is developers who work with AI. The product is local-first, with optional private device pairing and no required hosted account.
 
-## Implemented
+These are planned milestones, not shipped capabilities or promised dates. See the [README](../README.md) for current platform status.
 
-- [x] Activity, Tokens, Agents and Sources views with responsive light and dark themes.
-- [x] Local Mac view and private Windows access to the same snapshot.
-- [x] Automatic five-minute collection and visible-page refresh.
-- [x] Combined device activity with overlapping intervals counted once.
-- [x] All-host token totals guarded by cross-host session checks.
-- [x] Model details, recorded reasoning and speed, tool request counts and API price comparisons.
-- [x] Codex allowance snapshots and local model benchmark receipts.
-- [x] Compact weekly activity with three-hour bands, interactive details and tracking coverage.
-- [x] Public source repository with private snapshots excluded.
-- [x] Day, Week and All time token controls with period-matched model and host totals.
-- [x] Recorded tool identifiers and namespaces with per-date call counts.
-- [x] Bounded handoff receipt discovery, safe roles and explicit incomplete coverage.
+## 1. Reproducible desktop preview
 
-## In progress
+- Preserve the native Mac experience and add a Windows tray app with the same dashboard purpose.
+- Package required runtimes and provide clear first-run source setup.
+- On Windows, optionally start a selected installed Ubuntu distribution and its collector without an open terminal. Windows collection must still work without WSL.
+- Verify install, startup, sleep/wake, updates, rollback and uninstall on clean environments.
+- Publish versioned installers, checksums, changelogs and clear signing status.
 
-- [x] All time activity with explicit retained-history coverage.
-- [x] Identical public demo using synthetic data only.
-- [x] Published demo linked from the repository and verified at desktop and mobile viewport sizes.
-- [x] Repository pinned on the profile.
+## 2. Independent collection and private sync
 
-## Dictation integration
+- Record on each device while offline, without another computer acting as coordinator.
+- Pair trusted devices over optional Tailscale transport.
+- Exchange sanitized records with authentication, stable identities and deduplication.
+- Make retention, deletion, revocation and stale sources understandable.
 
-- [ ] Compare maintained free, open-source Mac and Windows dictation apps using source and user issue evidence.
-- [ ] Verify hold-to-talk and text at the active cursor while speaking, distinct from preview-only streaming.
-- [ ] Configure local-only inference with no paid fallback, automatic submit or always-on recording.
-- [ ] Verify global shortcut conflicts and microphone/accessibility permissions on each host.
-- [x] Add optional TypeWhisper daily transcription counts, recorded audio duration, words and fixed engine labels. Exact sessions, latency and failures are unavailable from this source.
-- [x] Verify aggregate collection on Mac and Windows and include fictional dictation data in the public-demo generator.
+## 3. Broader integration coverage
 
-## Source gaps
+- Reuse maintained open-source adapters where their licenses and privacy boundaries fit.
+- Add tested provider usage, coding-agent and local-model integrations through a small adapter contract.
+- Keep reported tokens, quotas, billed cost, estimates and workflow events separate.
+- Expand native Linux support and publish a tested platform and integration matrix.
 
-- [ ] iPhone activity and browser-based AI usage need an explicitly authorized data source.
-- [ ] Other provider allowances need a supported, verified reader.
-- [ ] Incomplete reasoning/speed metadata remains labeled partial or unknown.
+## 4. Optional workflow instrumentation
 
-No paid APIs or model calls are required for collection or the demo. Additional sources are not inferred from browser cookies or conversation content.
+Explore opt-in workflow event ingestion and request routing only after observation is dependable. A router measures traffic explicitly sent through it. It cannot reveal arbitrary subscription activity or replace operating-system screen-time collection.
+
+## Release standards
+
+Private data never enters demo builds or release artifacts. Unsupported telemetry is unavailable, not fabricated. Performance claims require measured idle and collection behavior. Every supported integration needs fixtures, coverage limits and failure handling. Security warnings and signing limitations must be disclosed, not bypassed.

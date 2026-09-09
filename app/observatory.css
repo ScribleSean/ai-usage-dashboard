@@ -5,59 +5,59 @@
   --status-warn-bg: #f4e0dc;
   --status-warn-ink: #923e31;
   --status-dot: #507659;
-  --browser-bg: #f5e2e7;
-  --browser-ink: #7c4e5c;
-  --terminal-bg: #d9eeea;
-  --terminal-ink: #346660;
-  --m3-primary: #654b98;
+  --browser-bg: #e4e4e7;
+  --browser-ink: #3f3f46;
+  --terminal-bg: #e4e4e7;
+  --terminal-ink: #3f3f46;
+  --m3-primary: #18181b;
   --m3-on-primary: #fff;
-  --m3-container: #eaddff;
-  --m3-on-container: #281047;
-  --m3-surface: #faf7fd;
-  --m3-low: #f2edf7;
-  --m3-high: #eae3f0;
-  --m3-ink: #241e2b;
-  --m3-secondary: #665e70;
-  --m3-outline: #d2c9db;
-  --background: #faf7fd;
-  --foreground: #241e2b;
-  --primary: #654b98;
+  --m3-container: #e4e4e7;
+  --m3-on-container: #18181b;
+  --m3-surface: #fafafa;
+  --m3-low: #f4f4f5;
+  --m3-high: #e4e4e7;
+  --m3-ink: #18181b;
+  --m3-secondary: #52525b;
+  --m3-outline: #d4d4d8;
+  --background: #fafafa;
+  --foreground: #18181b;
+  --primary: #18181b;
   --primary-foreground: #fff;
-  --muted: #eee7f5;
-  --muted-foreground: #665e70;
-  --ring: #765cab;
-  --card: #f2edf7;
-  --font-geist-sans: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  --muted: #e4e4e7;
+  --muted-foreground: #52525b;
+  --ring: #71717a;
+  --card: #f4f4f5;
+  --font-geist-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 }
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --m3-primary: #d0b7fa;
-  --m3-on-primary: #35204f;
-  --m3-container: #493260;
-  --m3-on-container: #efddff;
-  --m3-surface: #19151e;
-  --m3-low: #231e2b;
-  --m3-high: #302938;
-  --m3-ink: #eee6f3;
-  --m3-secondary: #c5b9cf;
-  --m3-outline: #71647e;
-  --background: #19151e;
-  --foreground: #eee6f3;
-  --primary: #d0b7fa;
-  --primary-foreground: #35204f;
-  --muted: #302938;
-  --muted-foreground: #c5b9cf;
-  --ring: #d0b7fa;
-  --card: #231e2b;
+  --m3-primary: #f5f5f5;
+  --m3-on-primary: #09090b;
+  --m3-container: #26262a;
+  --m3-on-container: #f5f5f5;
+  --m3-surface: #09090b;
+  --m3-low: #111113;
+  --m3-high: #1d1d20;
+  --m3-ink: #f5f5f5;
+  --m3-secondary: #a1a1aa;
+  --m3-outline: #343438;
+  --background: #09090b;
+  --foreground: #f5f5f5;
+  --primary: #f5f5f5;
+  --primary-foreground: #09090b;
+  --muted: #1d1d20;
+  --muted-foreground: #a1a1aa;
+  --ring: #a1a1aa;
+  --card: #111113;
   --status-good-bg: #213b2c;
   --status-good-ink: #a8dfb9;
   --status-warn-bg: #4b2926;
   --status-warn-ink: #ffb7aa;
   --status-dot: #a8dfb9;
-  --browser-bg: #472d3b;
-  --browser-ink: #f3b7cd;
-  --terminal-bg: #233e3b;
-  --terminal-ink: #a5d9d1;
+  --browser-bg: #26262a;
+  --browser-ink: #d4d4d8;
+  --terminal-bg: #26262a;
+  --terminal-ink: #d4d4d8;
 }
 .dictation-controls { display:flex; justify-content:space-between; flex-wrap:wrap; gap:1rem; margin:1.5rem 0; }
 .dictation-controls > div { display:flex; flex-wrap:wrap; gap:.5rem; }
@@ -120,7 +120,7 @@ summary:focus-visible {
   min-height: 100dvh;
 }
 .app-bar {
-  height: 84px;
+  height: 72px;
   padding: 0 30px 0 23px;
   display: flex;
   align-items: center;
@@ -129,26 +129,26 @@ summary:focus-visible {
 .wordmark {
   display: flex;
   align-items: center;
-  gap: 16px;
-  font-size: 1.35rem;
-  font-weight: 720;
-  letter-spacing: -0.04em;
+  gap: 10px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
 }
 .brand-mark {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 17px 17px 9px 17px;
-  background: var(--m3-primary);
-  color: var(--m3-on-primary);
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: #09090b;
+  color: #f5f5f5;
   font-size: 1.9rem;
   line-height: 1;
 }
 .wordmark-detail {
-  font-weight: 450;
-  color: var(--m3-secondary);
-  font-size: 1rem;
+  font-weight: 400;
+  color: inherit;
+  font-size: inherit;
   letter-spacing: -0.025em;
 }
 .app-actions {
@@ -185,20 +185,20 @@ summary:focus-visible {
 }
 .workspace-tabs {
   display: grid !important;
-  grid-template-columns: 96px minmax(0, 1fr);
+  grid-template-columns: 80px minmax(0, 1fr);
   gap: 0 !important;
-  min-height: calc(100dvh - 84px);
+  min-height: calc(100dvh - 72px);
 }
 .nav-rail {
   display: flex !important;
   flex-direction: column !important;
   align-items: center !important;
   justify-content: flex-start !important;
-  width: 96px !important;
+  width: 80px !important;
   height: auto !important;
   background: transparent !important;
-  padding: 22px 10px !important;
-  gap: 15px !important;
+  padding: 18px 6px !important;
+  gap: 10px !important;
   border-radius: 0 !important;
   position: sticky;
   top: 0;
@@ -210,8 +210,8 @@ summary:focus-visible {
   justify-content: center !important;
   gap: 6px !important;
   flex: 0 0 auto !important;
-  width: 76px !important;
-  height: 76px !important;
+  width: 68px !important;
+  height: 64px !important;
   padding: 0 !important;
   font-size: 0.875rem !important;
   font-weight: 600 !important;
@@ -225,11 +225,11 @@ summary:focus-visible {
   display: none !important;
 }
 .rail-icon {
-  width: 62px;
-  height: 37px;
+  width: 46px;
+  height: 32px;
   display: grid;
   place-items: center;
-  border-radius: 24px;
+  border-radius: 10px;
   transition:
     background 140ms,
     border-radius 160ms;
@@ -240,7 +240,7 @@ summary:focus-visible {
 }
 .rail-item[data-active] .rail-icon {
   background: var(--m3-container);
-  border-radius: 16px;
+  border-radius: 9px;
   color: var(--m3-on-container);
 }
 .rail-item[data-active] {
@@ -252,7 +252,8 @@ summary:focus-visible {
 .workspace-body {
   container-type: inline-size;
   margin: 0 20px 20px 0;
-  border-radius: 32px;
+  border-radius: 16px;
+  border: 1px solid var(--m3-outline);
   background: var(--m3-low);
   padding: 23px 32px 18px;
   min-width: 0;
@@ -570,13 +571,13 @@ summary:focus-visible {
   background: var(--m3-primary);
 }
 .segment.browser {
-  background: #ac7d8d;
+  background: #83838a;
 }
 .segment.terminal {
-  background: #497776;
+  background: #b0b0b8;
 }
 .segment.other {
-  background: #af9bc6;
+  background: #56565e;
 }
 .surface-bottom {
   display: flex;

@@ -1,8 +1,10 @@
 import { spawn } from 'node:child_process';
-export function pythonReport(host, script, folder) {
+export function pythonReport(host, script, folder, {nativeWindows=false}={}) {
   if (!/^\/[a-zA-Z0-9_./-]+$/.test(folder) || (host && !/^[a-zA-Z0-9][a-zA-Z0-9.-]*$/.test(host))) throw Error('Invalid report location');
+  if (nativeWindows && (!host || !/^\/mnt\/[a-z]\/[a-zA-Z0-9_./-]+$/.test(folder))) throw Error('Invalid native Windows report location');
+  const command = nativeWindows ? 'py -3 - '+folder[5].toUpperCase()+':'+folder.slice(6) : 'python3 - '+folder;
   return new Promise((resolve,reject) => {
-    const child = host ? spawn('/usr/bin/ssh',['-T','-oBatchMode=yes','-oConnectTimeout=8',host,'python3 - '+folder],{stdio:['pipe','pipe','ignore']}) : spawn('python3',['-',folder],{stdio:['pipe','pipe','ignore']});
+    const child = host ? spawn('/usr/bin/ssh',['-T','-oBatchMode=yes','-oConnectTimeout=8',host,command],{stdio:['pipe','pipe','ignore']}) : spawn('python3',['-',folder],{stdio:['pipe','pipe','ignore']});
     let output='', settled=false;
     const finish = (error,value) => { if(settled)return;settled=true;clearTimeout(timer);if(error){child.kill();reject(error);}else resolve(value); };
     const timer=setTimeout(()=>finish(Error('Report timed out')),60000);

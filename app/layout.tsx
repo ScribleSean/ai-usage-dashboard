@@ -4,6 +4,7 @@ import './observatory.css';
 
 export const metadata: Metadata = {
   title: 'Workspace Observatory',
+  description: 'A lightweight local workspace monitor for activity, AI usage and dictation.',
 };
 
 export default function RootLayout({
@@ -12,7 +13,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" data-theme="dark">
       <body className="antialiased">{children}</body>
     </html>
   );

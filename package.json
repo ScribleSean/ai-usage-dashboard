@@ -1,5 +1,5 @@
 {
-  "name": "ai-usage-dashboard",
+  "name": "workspace-observatory",
   "version": "0.1.0",
   "private": true,
   "engines": {
@@ -14,6 +14,9 @@
     "serve:local": "node serve-local.mjs",
     "dev": "vinext dev",
     "build": "vinext build",
+    "prebuild": "node scripts/build-brand.mjs",
+    "prebuild:native": "node scripts/build-brand.mjs",
+    "build:native": "node native/build.mjs",
     "start": "wrangler dev --config dist/server/wrangler.json",
     "lint": "oxlint",
     "format": "oxfmt"
