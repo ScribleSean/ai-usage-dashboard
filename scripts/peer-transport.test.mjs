@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {validatePeerTransport,sshPeerExchange} from './peer-transport.mjs';
+import {validatePeerTransport,sshPeerExchange,sshPeerSetup} from './peer-transport.mjs';
 import {createPairingConfigurations,validatePairing} from './peer-pairing.mjs';
 
 const transport=()=>({kind:'ssh-windows',hostAlias:'windows-codex',remoteNode:'C:/Apps/Observatory/node.exe',
@@ -28,4 +28,20 @@ test('only the Mac pairing can opt in to Windows SSH transport',()=>{
   const pair=createPairingConfigurations();
   assert.deepEqual(validatePairing({...pair.Mac,transport:transport()}).transport,transport());
   assert.throws(()=>validatePairing({...pair.Windows,transport:transport()}));
+});
+
+test('setup uses only the fixed sibling endpoint and sends private configuration on stdin',async()=>{
+  const pairing=createPairingConfigurations().Windows;
+  const result=await sshPeerSetup(transport(),pairing,async(args,input)=>{
+    const command=Buffer.from(args.at(-1).split(' ').at(-1),'base64').toString('utf16le');
+    assert.ok(command.includes('peer-setup-endpoint.mjs'));
+    assert.ok(!command.includes('peer-exchange.mjs'));
+    assert.ok(args.includes('StrictHostKeyChecking=yes'));
+    assert.ok(args.includes('BatchMode=yes'));
+    assert.ok(!command.includes(pairing.local.comparisonSalt));
+    assert.deepEqual(JSON.parse(input),{version:1,pairing});
+    return '{"version":1,"status":"ready"}';
+  });
+  assert.deepEqual(result,{version:1,status:'ready'});
+  await assert.rejects(sshPeerSetup(transport(),pairing,async()=>'{"version":1,"status":"ready","extra":true}'));
 });

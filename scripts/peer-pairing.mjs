@@ -1,6 +1,7 @@
 import {randomBytes} from 'node:crypto';
-import {open,lstat,readdir} from 'node:fs/promises';
+import {open,lstat,readdir,unlink} from 'node:fs/promises';
 import {constants} from 'node:fs';
+import {isDeepStrictEqual} from 'node:util';
 import path from 'node:path';
 import {privateSyncDirectory} from './peer-directory.mjs';
 import {preparePeerCollection} from './peer-collection.mjs';
@@ -50,11 +51,11 @@ export async function initializePairing(runtime,value) {
   await privateSyncDirectory(runtime);
 }
 
-export async function readPairing(runtime) {
+async function readPairingFile(runtime,filename) {
   let directory;
   try {directory=await privateSyncDirectory(runtime);}catch(error){if(error.code==='ENOENT')return null;throw error;}
   await assertPeerNotRevoked(directory);
-  const name=path.join(directory,'pairing.json');
+  const name=path.join(directory,filename);
   let before;
   try {before=await lstat(name);}catch(error){if(error.code==='ENOENT')return null;throw error;}
   if(!before.isFile() || before.isSymbolicLink() || before.nlink!==1 || before.size>4096 ||
@@ -68,4 +69,53 @@ export async function readPairing(runtime) {
     if(bytesRead!==before.size || after.size!==before.size || after.mtimeMs!==before.mtimeMs)throw Error('Changing private pairing file');
     return validatePairing(JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes.subarray(0,bytesRead))));
   } finally {await file.close();}
+}
+
+export const readPairing=runtime=>readPairingFile(runtime,'pairing.json');
+export const readPendingPairing=runtime=>readPairingFile(runtime,'setup.pending.json');
+
+async function writeSetupFile(directory,name,value) {
+  const bytes=JSON.stringify(validatePairing(value));
+  if(Buffer.byteLength(bytes)>4096)throw Error('Private pairing size limit');
+  const file=await open(path.join(directory,name),constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL,0o600);
+  try {await file.writeFile(bytes);await file.sync();}finally{await file.close();}
+}
+
+// Pending state is not consumed by collectors. A failed remote acknowledgement
+// leaves the same generation available for an explicit retry.
+export async function preparePendingPairing(runtime,value) {
+  const safe=validatePairing(value);
+  if(safe.local.host!=='Mac' || !safe.transport)throw Error('Mac setup transport required');
+  const directory=await privateSyncDirectory(runtime,true);
+  await assertPeerNotRevoked(directory);
+  if((await readdir(directory)).length)throw Error('Existing private state requires resume or repair');
+  await writeSetupFile(directory,'setup.pending.json',safe);
+  await privateSyncDirectory(runtime);
+  return safe;
+}
+
+// Only call after the authenticated peer acknowledged this exact generation.
+// Exclusive creation prevents overwriting an active or partially written file.
+// A corrupt partial file needs explicit repair; it is never silently replaced.
+export async function activatePendingPairing(runtime,expected) {
+  const safe=validatePairing(expected),directory=await privateSyncDirectory(runtime);
+  await assertPeerNotRevoked(directory);
+  let active=await readPairing(runtime),pending=await readPendingPairing(runtime);
+  if(active && !isDeepStrictEqual(active,safe))throw Error('Conflicting active pairing');
+  if(pending && !isDeepStrictEqual(pending,safe))throw Error('Conflicting pending pairing');
+  if(!active) {
+    if(!pending || (await readdir(directory)).some(name=>name!=='setup.pending.json'))
+      throw Error('Pending pairing unavailable or private state needs repair');
+    try {await writeSetupFile(directory,'pairing.json',safe);}
+    catch(error) {if(error.code!=='EEXIST')throw error;}
+    active=await readPairing(runtime);
+    if(!isDeepStrictEqual(active,safe))throw Error('Pairing activation could not be verified');
+  }
+  await assertPeerNotRevoked(directory);
+  pending=await readPendingPairing(runtime);
+  if(pending) {
+    if(!isDeepStrictEqual(pending,safe))throw Error('Pending pairing changed');
+    await unlink(path.join(directory,'setup.pending.json')).catch(error=>{if(error.code!=='ENOENT')throw error;});
+  }
+  return active;
 }

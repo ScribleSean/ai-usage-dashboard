@@ -28,20 +28,32 @@ function runSSH(args,input) {
 
 // Only the Mac initiates transport. Windows receives through its existing SSH
 // account and updates its dashboard on its next independent collection cycle.
-export async function sshPeerExchange(transport,record,invoke=runSSH) {
+async function sshRequest(transport,request,endpoint,invoke,limit) {
   const safe=validatePeerTransport(transport);
+  const script=endpoint==='setup'?path.win32.join(path.win32.dirname(safe.remoteScript),'peer-setup-endpoint.mjs'):safe.remoteScript;
   const quote=value=>"'"+value.replaceAll("'","''")+"'";
-  const command=`& ${quote(safe.remoteNode)} ${quote(safe.remoteScript)} ${quote(safe.remoteRuntime)}; exit $LASTEXITCODE`;
+  const command=`& ${quote(safe.remoteNode)} ${quote(script)} ${quote(safe.remoteRuntime)}; exit $LASTEXITCODE`;
   const encoded=Buffer.from(command,'utf16le').toString('base64');
   const args=['-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o','PasswordAuthentication=no',
     '-o','KbdInteractiveAuthentication=no','-o','ConnectTimeout=8',safe.hostAlias,
     `powershell -NoProfile -NonInteractive -EncodedCommand ${encoded}`];
-  const input=JSON.stringify({version:1,record});
-  if(Buffer.byteLength(input)>17_000_000)throw Error('Private SSH request limit');
+  const input=JSON.stringify(request);
+  if(Buffer.byteLength(input)>limit)throw Error('Private SSH request limit');
   const output=await invoke(args,input);
-  if(typeof output!=='string' || Buffer.byteLength(output)>17_000_000)throw Error('Private SSH response limit');
-  const response=JSON.parse(output);
+  if(typeof output!=='string' || Buffer.byteLength(output)>limit)throw Error('Private SSH response limit');
+  return JSON.parse(output);
+}
+
+export async function sshPeerExchange(transport,record,invoke=runSSH) {
+  const response=await sshRequest(transport,{version:1,record},'exchange',invoke,17_000_000);
   if(!response || typeof response!=='object' || Array.isArray(response) || response.version!==1 ||
     Object.keys(response).length!==2 || !Object.hasOwn(response,'record'))throw Error('Invalid private SSH response');
   return response.record; // The caller must validate and commit against saved peer identity.
+}
+
+export async function sshPeerSetup(transport,pairing,invoke=runSSH) {
+  const response=await sshRequest(transport,{version:1,pairing},'setup',invoke,8192);
+  if(!response || typeof response!=='object' || Array.isArray(response) || response.version!==1 ||
+    Object.keys(response).length!==2 || response.status!=='ready')throw Error('Invalid private setup response');
+  return response;
 }

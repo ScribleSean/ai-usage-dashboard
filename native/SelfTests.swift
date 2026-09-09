@@ -1,6 +1,12 @@
 import Foundation
 
 func runSelfTests() {
+    let pairingRequest = PairingSetupRequest(transport: PairingTransport(kind: "ssh-windows", hostAlias: "fixture-host",
+        remoteNode: "C:/Fixture/Runtime/node.exe", remoteScript: "C:/Fixture/Collector/peer-exchange.mjs", remoteRuntime: "C:/Fixture/Data"), includeUbuntu: false)
+    precondition((try? pairingRequest.validate()) != nil)
+    let invalidPairingRequest = PairingSetupRequest(transport: PairingTransport(kind: "ssh-windows", hostAlias: "-oBad",
+        remoteNode: "C:/Fixture/Runtime/node.exe", remoteScript: "C:/Fixture/Collector/peer-exchange.mjs", remoteRuntime: "C:/Fixture/Data"), includeUbuntu: false)
+    precondition((try? invalidPairingRequest.validate()) == nil)
     for (index, level) in DashboardZoom.levels.enumerated() {
         precondition(DashboardZoom.step(from: level, increasing: true) == DashboardZoom.levels[min(index + 1, DashboardZoom.levels.count - 1)])
         precondition(DashboardZoom.step(from: level, increasing: false) == DashboardZoom.levels[max(index - 1, 0)])
@@ -100,11 +106,17 @@ func runCollectorSelfTest() {
         precondition(number(status?["sourcesConfigured"]) == 0)
         let configFile = runtime.appendingPathComponent("collector.config.json")
         let originalConfig = try Data(contentsOf: configFile)
+        let setupStatus = try PairingSetup.readStatus(runtime: runtime, resources: resources)
+        precondition(setupStatus.status == .unpaired && setupStatus.request == nil)
+        precondition(!FileManager.default.fileExists(atPath: runtime.appendingPathComponent("private-sync").path))
         try PairingMaintenance.runDisconnect(runtime: runtime, resources: resources)
         try PairingMaintenance.runDisconnect(runtime: runtime, resources: resources)
         precondition(FileManager.default.fileExists(atPath: runtime.appendingPathComponent("private-sync/revoked").path))
         let retainedConfig = try Data(contentsOf: configFile)
         precondition(retainedConfig == originalConfig)
+        let disabledStatus = try PairingSetup.readStatus(runtime: runtime, resources: resources)
+        precondition(disabledStatus.status == .needsRepair && disabledStatus.request == nil)
+        print("Packaged pairing status self-test passed without exposing private credentials")
         print("Packaged pairing revocation self-test passed with temporary data")
         print("Packaged collector self-test passed with all sources disabled")
     } catch {

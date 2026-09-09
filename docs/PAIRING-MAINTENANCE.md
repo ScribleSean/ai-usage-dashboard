@@ -1,6 +1,45 @@
 # Private pairing maintenance
 
-Pairing setup and repair are still under development. Do not hand-edit identifiers, remove a revocation marker to reconnect, or reset a sequence counter. No permanent pairing is installed by the release build process.
+Pairing setup has a source CLI and a Mac setup dialog. Repair is still under development. Do not hand-edit identifiers, remove a revocation marker to reconnect, or reset a sequence counter. No permanent pairing is installed by the release build process.
+
+## Set up or resume a pairing
+
+Use the Mac setup CLI only after verifying that the SSH alias resolves to the intended Windows machine and account, its host key is trusted, and noninteractive key authentication already works. This tool does not create credentials, enable SSH, accept a new host key or open a network listener. Both installations need the updated collector scripts, including `peer-setup-endpoint.mjs` on Windows.
+
+In the Mac source build, choose **Pair with Windows…** from the app menu or menu-bar icon's context menu. Enter the existing SSH alias, Windows bundled Node executable, exchange script and app data directory. Ubuntu scope is optional and does not start or enable a source. Cancel sends nothing. Setup blocks this app's collection while the dialog or request is active. On success, local collection resumes. If the request fails, collection stays paused for that app session and the saved target can be retried. This session pause does not stop a different process or device.
+
+Saved pending and active targets are prefilled and read-only. The form does not receive comparison salts, device identifiers or records. Revoked, corrupt or conflicting local state shows a repair message instead of a replacement form. The read-only CLI `--status` mode supplies these fields without creating pairing state. It is not a remote health check.
+
+The September 9 Mac preview check covered form layout, rejection of empty fields, cancellation without a pairing write, acknowledged setup over the existing SSH route, saved-target verification without changing the generation and an unavailable-peer error. The two pairings were temporary and removed afterward. This is not a clean-machine authentication/setup check. Windows still needs verified installation paths rather than a native copy-details assistant, and repair/rotation remains unavailable.
+
+The command reads an explicit request from stdin:
+
+```sh
+node scripts/peer-setup.mjs --runtime /absolute/path/to/private/runtime --setup < /absolute/path/to/setup-request.json
+```
+
+Example request with fictional paths, to be replaced with the verified installation paths:
+
+```json
+{
+  "includeUbuntu": false,
+  "transport": {
+    "kind": "ssh-windows",
+    "hostAlias": "my-windows",
+    "remoteNode": "C:/Apps/Observatory/Runtime/node.exe",
+    "remoteScript": "C:/Apps/Observatory/Collector/scripts/peer-exchange.mjs",
+    "remoteRuntime": "C:/Users/Example/AppData/Local/Workspace Observatory"
+  }
+}
+```
+
+Keep the request outside Git because it identifies private installation paths. It contains no SSH key or comparison salt. `includeUbuntu` is explicit pairing scope, not permission to enable or reconfigure WSL collection. The corresponding source must be configured consistently on Windows before it can export usable data.
+
+The Mac first saves `private-sync/setup.pending.json`. Normal collection ignores this pending configuration and stays standalone. Setup sends the complementary Windows configuration only through authenticated SSH stdin. The Windows endpoint either initializes an empty private directory or verifies an exact match with an existing pairing. It refuses a different generation, revoked state or unreadable configuration. After a successful acknowledgement, Mac exclusively creates its active configuration and removes the pending file.
+
+If the connection fails or its reply is lost, retry the same command with the same target and Ubuntu scope. The saved pending generation is reused. A remote pairing may already exist after an uncertain reply; retries do not reset it. Active matching pairings can also be rechecked without changing their credentials. A changed target or scope requires explicit repair, not an automatic replacement.
+
+Partial or corrupt files fail closed. A process interrupted during a file write can leave state that needs repair; this is not a fully crash-atomic transaction across two computers. Setup does not erase those files or revoke a remote pairing as rollback. Revocation during setup prevents subsequent local activation, but an acknowledged remote write can remain and must be handled on that device.
 
 ## Disable a local pairing
 
@@ -28,4 +67,4 @@ An automated repair/rotation workflow is not available yet. Keep the old generat
 
 ## Verification limits
 
-Synthetic tests cover local revocation, unchanged stored bytes, refusal to initialize over revoked state, malformed configuration, interrupted markers, stale in-memory pairing, exchange refusal and standalone native collection. They do not prove immediate cancellation of an in-flight transfer, remote SSH-access revocation, power-loss durability or a completed native pairing UI.
+Synthetic tests cover local revocation, unchanged stored bytes, refusal to initialize over revoked state, malformed configuration, interrupted markers, stale in-memory pairing, exchange refusal and standalone native collection. They do not prove immediate cancellation of an in-flight transfer, remote SSH-access revocation, power-loss durability or complete two-device onboarding. The Mac dialog is a source-build feature and is not in the previously generated installers.

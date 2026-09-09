@@ -64,6 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         items.addItem(withTitle: "Open Observatory", action: #selector(openDefault), keyEquivalent: "o").target = self
         items.addItem(withTitle: "Refresh sources", action: #selector(refresh), keyEquivalent: "r").target = self
         items.addItem(withTitle: "Local source settings…", action: #selector(sourceSettings), keyEquivalent: ",").target = self
+        items.addItem(withTitle: "Pair with Windows…", action: #selector(setupPairing), keyEquivalent: "").target = self
         items.addItem(withTitle: "Disconnect paired device…", action: #selector(disconnectPairing), keyEquivalent: "").target = self
         items.addItem(.separator())
         items.addItem(withTitle: "Quit Observatory", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
@@ -118,6 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         menu.addItem(withTitle: "Open Observatory", action: #selector(openDefault), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Refresh sources", action: #selector(refresh), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Local source settings…", action: #selector(sourceSettings), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Pair with Windows…", action: #selector(setupPairing), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Disconnect paired device…", action: #selector(disconnectPairing), keyEquivalent: "").target = self
         menu.addItem(.separator())
         let login = menu.addItem(withTitle: "Launch at login", action: #selector(toggleLogin), keyEquivalent: "")
@@ -198,6 +200,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
     }
     @objc private func refresh() { store.refresh() }
+    @objc private func setupPairing() {
+        popover.performClose(nil)
+        guard !store.refreshing, !store.pairingMaintenance, let resources = Bundle.main.resourceURL else {
+            let busy = NSAlert()
+            busy.messageText = "Pairing is waiting"
+            busy.informativeText = "A local operation is running. Try again when it finishes."
+            busy.runModal()
+            return
+        }
+        store.pairingMaintenance = true
+        Task { @MainActor in
+            var refreshAfter = false
+            defer { store.pairingMaintenance = false; if refreshAfter { store.refresh() } }
+            let result = NSAlert()
+            do {
+                let saved = try await PairingSetup.status(runtime: store.runtime, resources: resources)
+                guard saved.status != .needsRepair else {
+                    result.messageText = "Pairing needs repair"
+                    result.informativeText = "Private state is disabled, conflicting or unreadable. It was not changed. Repair is not available yet. Do not delete private files or remove a revocation marker to reconnect."
+                    result.runModal()
+                    return
+                }
+                NSApp.activate(ignoringOtherApps: true)
+                guard let request = PairingSetupDialog.request(saved: saved) else { return }
+                let progress = PairingSetupDialog.progress()
+                do {
+                    try await PairingSetup.connect(runtime: store.runtime, resources: resources, request: request)
+                    progress.close()
+                    store.collectionPausedForPairing = false
+                    refreshAfter = true
+                    result.messageText = "Pairing acknowledged"
+                    result.informativeText = "Windows acknowledged the saved pairing. Source settings are unchanged. Combined data appears after successful collection and exchange on both devices. This does not verify that every source is available."
+                } catch {
+                    progress.close()
+                    store.collectionPausedForPairing = true
+                    result.messageText = "Pairing setup incomplete"
+                    result.informativeText = "Collection is paused for this session. Windows may already have saved its pairing. Check the existing SSH connection and Windows installation, then open Pair with Windows again to retry the saved target. Private state was not replaced."
+                }
+            } catch {
+                result.messageText = "Pairing status unavailable"
+                result.informativeText = "The bundled setup tool could not read pairing status. No setup was requested and existing private state was not changed."
+            }
+            result.runModal()
+        }
+    }
     @objc private func disconnectPairing() {
         popover.performClose(nil)
         let alert = NSAlert()

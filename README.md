@@ -30,7 +30,7 @@ Missing data stays missing. Estimates stay labeled. Token counts are not subscri
 
 - **Native Mac menu bar.** SwiftUI panel, system WebKit detail window, launch at login and automatic refresh. No manually started web server or bundled Chromium engine.
 - **Your data stays yours.** No required hosted account. The dashboard retains allowlisted usage metadata, not prompts, transcripts, recordings or credentials.
-- **One view across your setup.** The Mac collector can read configured Windows and Ubuntu sources over SSH. A Windows tray preview now collects locally. Optional device sync is still planned.
+- **One view across your setup.** The Mac collector can read configured Windows and Ubuntu sources over SSH. The Windows tray preview collects locally. Source builds also support [optional device pairing](docs/PAIRING-MAINTENANCE.md) over an existing SSH connection. Repair and simpler Windows setup remain unfinished.
 - **Inspectable by design.** Source health, freshness, tests and measurement limits are part of the product, not hidden behind a total.
 
 ## Try it
