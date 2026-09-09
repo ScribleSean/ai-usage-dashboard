@@ -48,4 +48,10 @@ The `ca8c7e7` Mac ZIP includes these fixes and passed extraction plus relocated 
 - Repeat the interaction and layout checks in Windows WebView2. A Windows web build does not prove Windows-native interaction behavior.
 - Complete the remaining release checks on the final candidate. The current ZIP and installer artifacts embed `ca8c7e7`; documentation-only commits do not change their embedded revision or require relabeling them.
 
+## Mac disconnect failure and retry
+
+A later isolated development-preview check used only a synthetic sentinel and no configured sources. An unsafe private-directory permission fixture caused the native disconnect action to fail. The visible alert explained that collection was paused and offered retry guidance. The saved sentinel stayed unchanged, no revocation marker was created, and a manual source refresh left the collector snapshot unchanged.
+
+After correcting only the fixture permissions, retry displayed the success alert, created the revocation marker, preserved the sentinel and resumed local collection. Both result dialogs were inspected visually and through accessibility text. Quitting the preview removed its temporary data. No installed app or Windows state was changed. This does not cover every failure cause, Windows dialogs or full screen-reader navigation.
+
 See the [release checklist](RELEASE-CHECKLIST.md) for the remaining installation, lifecycle, security and publication gates.
