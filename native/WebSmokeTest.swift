@@ -17,6 +17,7 @@ final class WebSmokeTest: NSObject, WKNavigationDelegate {
             try JSONSerialization.data(withJSONObject: ["state": "ok"]).write(to: local.appendingPathComponent("collector.json"))
             guard let resources = Bundle.main.resourceURL else { finish(false); return }
             let view = makeDashboard(runtime: runtime, resources: resources)
+            view.frame = NSRect(x: 0, y: 0, width: 1100, height: 760)
             view.navigationDelegate = self
             web = view
             timer = Timer.scheduledTimer(withTimeInterval: 25, repeats: false) { [weak self] _ in
@@ -34,7 +35,16 @@ final class WebSmokeTest: NSObject, WKNavigationDelegate {
             let denied = false;
             try { await window.webkit.messageHandlers.snapshot.postMessage('../native-runtime'); }
             catch { denied = true; }
-            return object.smokeTest === true && denied && window.observatoryBundleReady === true;
+            // React mounts asynchronously. Verify the primitive's actual semantics,
+            // not only the CSS orientation attribute on its wrapper.
+            let views;
+            for (let attempt = 0; attempt < 100; attempt++) {
+              views = document.querySelector('[role="tablist"][aria-label="Usage views"]');
+              if (views?.getAttribute('aria-orientation') === 'vertical') break;
+              await new Promise(resolve => setTimeout(resolve, 50));
+            }
+            return object.smokeTest === true && denied && window.observatoryBundleReady === true
+              && views?.getAttribute('aria-orientation') === 'vertical';
             """, arguments: [:], in: nil, contentWorld: .page)
             finish(value as? Bool == true)
           } catch { finish(false) }
