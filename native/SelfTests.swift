@@ -1,6 +1,14 @@
 import Foundation
 
 func runSelfTests() {
+    for (index, level) in DashboardZoom.levels.enumerated() {
+        precondition(DashboardZoom.step(from: level, increasing: true) == DashboardZoom.levels[min(index + 1, DashboardZoom.levels.count - 1)])
+        precondition(DashboardZoom.step(from: level, increasing: false) == DashboardZoom.levels[max(index - 1, 0)])
+    }
+    precondition(DashboardZoom.step(from: .nan, increasing: true) == 1)
+    precondition(DashboardZoom.step(from: .infinity, increasing: false) == 1)
+    precondition(DashboardZoom.step(from: 1.3, increasing: true) == 1.5)
+    precondition(DashboardZoom.step(from: 1.3, increasing: false) == 1.25)
     precondition((try? CollectorConfiguration.validate([:])) == CollectorConfiguration.defaults)
     precondition((try? CollectorConfiguration.validate(["wispr": true]))?["wispr"] == true)
     precondition((try? CollectorConfiguration.validate(["codex": 1])) == nil)

@@ -4,7 +4,7 @@ import ServiceManagement
 import WebKit
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemValidation {
     private var statusItem: NSStatusItem!
     private let popover = NSPopover()
     private var detail: NSWindow?
@@ -68,6 +68,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         items.addItem(withTitle: "Quit Observatory", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         application.submenu = items
         menu.addItem(application)
+        let view = NSMenuItem()
+        let viewMenu = NSMenu(title: "View")
+        viewMenu.addItem(withTitle: "Zoom In", action: #selector(zoomIn), keyEquivalent: "=").target = self
+        viewMenu.addItem(withTitle: "Zoom Out", action: #selector(zoomOut), keyEquivalent: "-").target = self
+        viewMenu.addItem(withTitle: "Actual Size", action: #selector(actualSize), keyEquivalent: "0").target = self
+        viewMenu.addItem(.separator())
+        viewMenu.addItem(withTitle: "200%", action: #selector(doubleSize), keyEquivalent: "").target = self
+        view.submenu = viewMenu
+        menu.addItem(view)
         let window = NSMenuItem()
         let windowMenu = NSMenu(title: "Window")
         windowMenu.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
@@ -188,6 +197,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     @objc private func refresh() { store.refresh() }
     @objc private func openDefault() { openDashboard("activity") }
+
+    @objc private func zoomIn() {
+        guard let webView else { return }
+        webView.pageZoom = CGFloat(DashboardZoom.step(from: Double(webView.pageZoom), increasing: true))
+    }
+    @objc private func zoomOut() {
+        guard let webView else { return }
+        webView.pageZoom = CGFloat(DashboardZoom.step(from: Double(webView.pageZoom), increasing: false))
+    }
+    @objc private func actualSize() { webView?.pageZoom = 1 }
+    @objc private func doubleSize() { webView?.pageZoom = 2 }
+
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        let zoom = webView?.pageZoom
+        switch item.action {
+        case #selector(zoomIn): return zoom.map { $0 < 2 } ?? false
+        case #selector(zoomOut): return zoom.map { $0 > 0.75 } ?? false
+        case #selector(actualSize):
+            item.state = zoom == 1 ? .on : .off
+            return zoom != nil
+        case #selector(doubleSize):
+            item.state = zoom == 2 ? .on : .off
+            return zoom != nil
+        default: return true
+        }
+    }
 
     private func openDashboard(_ tab: String) {
         popover.performClose(nil)
