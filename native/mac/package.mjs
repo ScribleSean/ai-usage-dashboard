@@ -44,6 +44,13 @@ check(extractedApp);
 const zipArtifact=recordVerifiedZip(output,manifest,zip);
 cpSync(path.join(root,'native/mac/INSTALL.txt'),path.join(output,'INSTALL.txt'),{errorOnExist:true,force:false});
 console.log('ZIP verified. Independent manifest, checksum and verification receipt saved.');
+if(process.argv.includes('--zip-only')) {
+  // No image has been created or mounted in this explicitly selected mode.
+  rmSync(stage,{recursive:true});
+  console.log(JSON.stringify({output,artifacts:[zipArtifact],unpackedBytes:manifest.bytes,
+    zipVerification:'passed',dmgVerification:'not-requested',temporaryCopiesRemoved:true}));
+  process.exit(0);
+}
 const dmg=path.join(output,name+'.dmg');
 try {
   // hdiutil can remain inside AuthorizationCopyRights after SIGTERM. Creation
