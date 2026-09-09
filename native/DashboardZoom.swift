@@ -8,4 +8,13 @@ enum DashboardZoom {
         if increasing { return levels.first(where: { $0 > current + 0.001 }) ?? 2 }
         return levels.last(where: { $0 < current - 0.001 }) ?? 0.75
     }
+
+    static func shortcut(_ key: String, from current: Double) -> Double? {
+        switch key {
+        case "=", "+": return step(from: current, increasing: true)
+        case "-": return step(from: current, increasing: false)
+        case "0": return 1
+        default: return nil
+        }
+    }
 }

@@ -1,6 +1,18 @@
 import AppKit
 import WebKit
 
+final class DashboardWebView: WKWebView {
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.modifierFlags.intersection([.command, .control, .option]) == .command,
+           let key = event.charactersIgnoringModifiers,
+           let next = DashboardZoom.shortcut(key, from: Double(pageZoom)) {
+            pageZoom = CGFloat(next)
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+}
+
 final class BundledAssets: NSObject, WKURLSchemeHandler {
     private let resolver: AssetResolver
     init(root: URL) { resolver = AssetResolver(root: root) }
@@ -83,7 +95,7 @@ func makeDashboard(runtime: URL, resources: URL) -> WKWebView {
     })();
     """
     config.userContentController.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: true))
-    let web = WKWebView(frame: .zero, configuration: config)
+    let web = DashboardWebView(frame: .zero, configuration: config)
     web.underPageBackgroundColor = .windowBackgroundColor
     web.allowsBackForwardNavigationGestures = false
     return web
