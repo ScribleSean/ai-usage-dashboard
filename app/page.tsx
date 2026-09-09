@@ -846,7 +846,7 @@ export default function Home() {
                 </div>
                 <section className="collection-panel" aria-label="Background collection">
                   <h2>Background collection</h2>
-                  <p>{data.demo?'This public demo uses fixed fictional records. No devices, accounts or collectors are connected.':collector?.intervalSeconds===300?'Expected every 5 minutes while the hosting Mac is awake and logged in.':'No recent scheduled-run status. Manual collection is available with npm run collect.'}</p>
+                  <p>{data.demo?'This public demo uses fixed fictional records. No devices, accounts or collectors are connected.':collector?.intervalSeconds===300?'Expected every 5 minutes while the collecting device is awake and collection is enabled.':'No recent scheduled-run status. Check the native app or your configured collector.'}</p>
                   {collector && <div className="collection-status"><span className={'run-state '+(collector.state==='failed'||collector.state==='partial'?'warn':'')}>{collectorRunning?'Collecting saved records':collector.state==='running'?'Completion overdue':collector.state==='ok'?'Last run complete':collector.state==='partial'?'Some sources unavailable':'Last run failed'}</span><span>{collector.finishedAt?'Finished '+freshness(collector.finishedAt,now || Date.now()).label:'Started '+collectorAge.label}</span></div>}
                   <p>The page checks for a newer snapshot every 30 seconds while visible. Browsing the dashboard does not launch collection or model tasks.</p>
                 </section>

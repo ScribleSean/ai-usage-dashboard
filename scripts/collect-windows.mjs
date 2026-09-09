@@ -40,7 +40,7 @@ export async function collectWindows(runtime) {
   await atomic('collector.json',{state:'running',startedAt,intervalSeconds:300,maxRunSeconds:240});
   const guarded=async(host,action)=>{try{return {...await action(),checkedAt:new Date().toISOString()};}catch{return unavailable(host);}};
   const python=process.env.OBSERVATORY_PYTHON || path.join(process.env.SystemRoot || 'C:/Windows','py.exe');
-  const pythonArgs=path.basename(python).toLowerCase()==='py.exe'?['-3','-']:['-'];
+  const pythonArgs=path.basename(python).toLowerCase()==='py.exe'?['-3','-B','-X','utf8','-']:['-B','-X','utf8','-'];
   const wsl=path.join(process.env.SystemRoot || 'C:/Windows','System32/wsl.exe');
   const settingsScript=await readFile(path.join(scripts,'read-settings.py'),'utf8');
   const [localSettings,ubuntuSettings,windows,wispr]=await Promise.all([guarded('Windows',async()=>{

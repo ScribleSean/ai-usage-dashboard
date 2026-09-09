@@ -18,11 +18,25 @@ The icon is committed as a small generated asset. Its source is the canonical [t
 
 The build runs native snapshot and startup-contract tests, plus Windows collector-contract tests. It does not prove the UI works on a signed-in desktop. Run the executable from `native\windows\bin\Release\net10.0-windows` to inspect the tray and dashboard.
 
+## Prepare a package candidate
+
+```powershell
+.\native\windows\package.ps1
+```
+
+This runs the development build and publishes a fresh candidate under `native\windows\release\candidate-ID\Workspace Observatory`. It bundles Node, Python, timezone data and .NET, so the packaged app does not require separate installations of those runtimes. Microsoft Edge WebView2 Runtime remains a system prerequisite.
+
+Runtime archives have pinned download URLs and SHA-256 digests. The package includes dependency notices and a file-hash manifest. Packaging rejects known private data filenames, linked entries, debug symbols, Python bytecode-cache directories and detected build-machine paths. The manifest records the source revision and whether the checkout had uncommitted changes. A dirty candidate is not a versioned release.
+
+`-SkipWebBuild` is an explicit development shortcut for packaging-only changes after a successful dashboard build. Do not use it for final release verification. Windows downloads, dependency caches and output stay on the Windows machine.
+
+The tested candidate is about 224 MiB unpacked, including its private runtimes. This is a disk-size measurement, not a memory or CPU claim. Candidates are unsigned and may trigger Windows security warnings. A public installer is not yet available.
+
 ## Configure sources
 
 Choose **Configure local collection** from the telescope tray menu. ActivityWatch must already be installed and running for screen time. Saved native Windows Codex records are read locally. Ubuntu collection is optional and starts the installed `Ubuntu` WSL distribution in the background during collection. Windows collection does not require WSL. Wispr Flow statistics are separately opt-in.
 
-The current collector requires a working Python 3 installation with timezone data and a Node installation. Portable runtime bundling is a remaining release gate. Local settings and snapshots live under `%LOCALAPPDATA%\Workspace Observatory`, outside the source checkout. Collection runs every five minutes while the configured app is running.
+The plain development executable requires a working Python 3 installation with timezone data and a Node installation. Package candidates use their bundled copies instead. Local settings and snapshots live under `%LOCALAPPDATA%\Workspace Observatory`, outside the source checkout. Collection runs every five minutes while the configured app is running.
 
 Only allowlisted metadata enters snapshots. Prompts, tool arguments, window titles, transcripts and recordings are excluded. Unsupported or disconnected sources remain unavailable. Combined cross-device token totals are not published by this collector until private sync and deduplication are implemented.
 
@@ -34,6 +48,8 @@ Disable registration before moving or removing the app folder. Another installat
 
 ## Verification and remaining gates
 
-On the development Windows machine, the native build and snapshot tests pass. A signed-in desktop smoke test loaded the React dashboard and fetched the local snapshot through WebView2. Native Windows activity, saved Codex usage, Wispr statistics and optional Ubuntu Codex usage were collected successfully. These checks cover one configured machine, not clean-install compatibility or a full visual and accessibility review.
+On the development Windows machine, the native build and snapshot tests pass. The packaged app collected native Windows activity, saved Codex usage, Wispr statistics and optional Ubuntu Codex usage using its bundled runtimes. A signed-in desktop smoke test loaded the packaged React dashboard with fictional records and fetched its local snapshot through WebView2. The Activity view was visually inspected at the tested window size. These checks cover one configured machine, not clean-install compatibility or a full visual and accessibility review.
 
-Remaining work includes bundled runtime licensing and packaging, an installer and uninstall flow, signed-release status, login and sleep/wake testing, resource measurements, independent Mac collection and private device sync. Do not publish local snapshots or build caches as release artifacts.
+For a synthetic desktop test, prepare a new private test directory with `node native/windows/prepare-demo-runtime.mjs ABSOLUTE_NEW_DIRECTORY`. Run the packaged executable with `--test-web ABSOLUTE_NEW_DIRECTORY` from the signed-in desktop. The test captures only the WebView and only for a snapshot marked as synthetic. It does not capture other windows or the desktop. The result and WebView cache belong in that test directory, never in a release package.
+
+Remaining work includes an installer and uninstall flow, versioned release checksums, clean-environment checks, login and sleep/wake testing, CPU and memory measurements, independent Mac collection and private device sync. Do not publish local snapshots or build caches as release artifacts.

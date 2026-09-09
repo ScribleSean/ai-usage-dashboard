@@ -74,6 +74,23 @@ internal sealed class Dashboard : Form
                     }
                     break;
                 }
+                var demo = Snapshot.Read(Path.Combine(runtime, "public", "local", "usage.json"))?["demo"];
+                if (passed && demo is System.Text.Json.Nodes.JsonValue demoValue && demoValue.TryGetValue<bool>(out var synthetic) && synthetic)
+                {
+                    var visible = false;
+                    for (var attempt = 0; attempt < 25 && !IsDisposed; attempt++)
+                    {
+                        if (await core.ExecuteScriptAsync("document.body.innerText.includes('Synthetic demo')") == "true") { visible = true; break; }
+                        await Task.Delay(200);
+                    }
+                    if (!visible) passed = false;
+                    else
+                    {
+                        // Capture this WebView only, and only when using explicit synthetic fixtures.
+                        using var capture = File.Create(Path.Combine(runtime, "web-smoke.png"));
+                        await core.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, capture);
+                    }
+                }
                 Console.WriteLine(passed ? "web-smoke: ok" : "web-smoke: failed");
                 Environment.ExitCode = passed ? 0 : 1;
                 Close();
