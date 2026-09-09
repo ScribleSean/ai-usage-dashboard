@@ -4,6 +4,8 @@ import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,symlinkSync} fro
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {inspectMacPackage,verifyMacPackage} from '../native/mac/inspect-package.mjs';
+import {recordVerifiedZip} from '../native/mac/release-record.mjs';
+import {createHash} from 'node:crypto';
 
 function fixture(run) {
   const folder=mkdtempSync(path.join(tmpdir(),'observatory-mac-package-'));
@@ -65,5 +67,25 @@ test('Mac package links must remain inside the app and match the manifest', {ski
     assert.equal(manifest.symlinks.length,1);
     rmSync(link);assert.throws(()=>verifyMacPackage(bundle,manifest),/does not match/);
     symlinkSync(process.execPath,link);assert.throws(()=>inspectMacPackage(bundle),/escapes/);
+  });
+});
+
+test('independent ZIP receipts contain exact hashes, exclude DMG claims and refuse overwrite',()=>{
+  fixture(({bundle})=>{
+    const output=path.dirname(bundle),zip=path.join(output,'fixture.zip');
+    const bytes=Buffer.from('synthetic archive');
+    writeFileSync(zip,bytes);
+    const manifest=inspectMacPackage(bundle);
+    const artifact=recordVerifiedZip(output,manifest,zip);
+    assert.equal(artifact.sha256,createHash('sha256').update(bytes).digest('hex'));
+    assert.equal(artifact.bytes,bytes.length);
+    assert.equal(artifact.filename,'fixture.zip');
+    const receipt=JSON.parse(readFileSync(path.join(output,'zip-verification.json'),'utf8'));
+    assert.deepEqual(receipt.artifacts,[artifact]);
+    assert.equal(receipt.checks.some(check=>check.includes('dmg')),false);
+    assert.match(receipt.scope,/ZIP only/);
+    assert.equal(readFileSync(path.join(output,'zip-SHA256SUMS.txt'),'utf8'),`${artifact.sha256}  fixture.zip\n`);
+    assert.deepEqual(JSON.parse(readFileSync(path.join(output,'app-manifest.json'),'utf8')),manifest);
+    assert.throws(()=>recordVerifiedZip(output,manifest,zip),/EEXIST/);
   });
 });

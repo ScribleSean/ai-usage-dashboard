@@ -1,11 +1,11 @@
 import {execFileSync} from 'node:child_process';
-import {readFileSync,writeFileSync,mkdirSync,mkdtempSync,cpSync,symlinkSync,existsSync,statSync,realpathSync,rmSync} from 'node:fs';
-import {createHash} from 'node:crypto';
+import {writeFileSync,mkdirSync,mkdtempSync,cpSync,symlinkSync,existsSync,realpathSync,rmSync} from 'node:fs';
 import {homedir,tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {sourceState} from '../source-state.mjs';
 import {inspectMacPackage,verifyMacPackage} from './inspect-package.mjs';
+import {describeArtifact,recordVerifiedZip} from './release-record.mjs';
 
 if(process.platform!=='darwin')throw Error('Mac packaging requires macOS');
 const root=fileURLToPath(new URL('../..',import.meta.url));
@@ -41,9 +41,20 @@ execFileSync('/usr/bin/ditto',['-x','-k',zip,extracted],{stdio:'inherit',timeout
 const extractedApp=path.join(extracted,'Workspace Observatory.app');
 verifyMacPackage(extractedApp,manifest,{buildRoots});
 check(extractedApp);
+const zipArtifact=recordVerifiedZip(output,manifest,zip);
+cpSync(path.join(root,'native/mac/INSTALL.txt'),path.join(output,'INSTALL.txt'),{errorOnExist:true,force:false});
+console.log('ZIP verified. Independent manifest, checksum and verification receipt saved.');
 const dmg=path.join(output,name+'.dmg');
-execFileSync('/usr/bin/hdiutil',['create','-srcfolder',contents,'-volname','Workspace Observatory',
-  '-format','UDZO','-fs','HFS+','-nospotlight','-srcowners','off',dmg],{stdio:'inherit',timeout:120000});
+try {
+  // hdiutil can remain inside AuthorizationCopyRights after SIGTERM. Creation
+  // has not attached our image, so bound this child without touching any mounts.
+  execFileSync('/usr/bin/hdiutil',['create','-srcfolder',contents,'-volname','Workspace Observatory',
+    '-format','UDZO','-fs','HFS+','-nospotlight','-srcowners','off',dmg],
+  {stdio:'inherit',timeout:120000,killSignal:'SIGKILL'});
+} catch(error) {
+  console.error('DMG creation failed. The verified ZIP and its receipt remain available; any DMG file is unverified. Temporary copies are preserved.');
+  throw error;
+}
 execFileSync('/usr/bin/hdiutil',['verify',dmg],{stdio:'inherit',timeout:120000});
 const mount=path.join(stage,'dmg-check');
 mkdirSync(mount);
@@ -57,11 +68,8 @@ try {
   if(mounted || existsSync(path.join(mount,'Workspace Observatory.app')))
     execFileSync('/usr/bin/hdiutil',['detach',mount],{stdio:'inherit',timeout:30000});
 }
-writeFileSync(path.join(output,'app-manifest.json'),JSON.stringify(manifest,null,2)+'\n',{flag:'wx'});
-const artifacts=[zip,dmg].map(file=>({filename:path.basename(file),bytes:statSync(file).size,
-  sha256:createHash('sha256').update(readFileSync(file)).digest('hex')}));
+const artifacts=[zipArtifact,describeArtifact(dmg)];
 writeFileSync(path.join(output,'SHA256SUMS.txt'),artifacts.map(asset=>`${asset.sha256}  ${asset.filename}\n`).join(''),{flag:'wx'});
-cpSync(path.join(root,'native/mac/INSTALL.txt'),path.join(output,'INSTALL.txt'),{errorOnExist:true,force:false});
 writeFileSync(path.join(output,'release-info.json'),JSON.stringify({platform:manifest.platform,version:manifest.version,
   sourceRevision:manifest.sourceRevision,signing:manifest.signing,unpackedBytes:manifest.bytes,
   checks:['source-clean','privacy-scan','full-file-manifest','nested-signatures','zip-roundtrip','relocated-collector','relocated-webkit','dmg-integrity','mounted-dmg-manifest'],artifacts},null,2)+'\n',{flag:'wx'});

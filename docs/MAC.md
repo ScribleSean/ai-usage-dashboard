@@ -26,6 +26,18 @@ The candidate passes configuration self-tests, an isolated bundled-collector tes
 
 For an isolated UI check, launch the built executable with `--preview --show`. This creates temporary settings with every source disabled, does not change installed settings, and prevents launch-at-login changes. Preview source choices affect only that temporary data folder. Quit the preview when finished.
 
+## Distribution packaging
+
+From a clean checkout matching the app's embedded source revision:
+
+```sh
+node native/mac/package.mjs --bundle '/absolute/Workspace Observatory.app' --output /absolute/new-distribution
+```
+
+The packager checks every bundled file, scans for private filenames and build paths, verifies signatures, and runs the native, bundled-collector and WebKit tests. It creates a ZIP, extracts it into a new location and repeats those checks. It saves `app-manifest.json`, `zip-SHA256SUMS.txt` and `zip-verification.json` immediately after ZIP verification, before attempting the DMG. These files describe the ZIP only, not a clean-machine install or publisher authentication.
+
+DMG creation is bounded to two minutes. macOS may request authorization; handle system prompts yourself and never share a password with an agent. A failed DMG attempt leaves the verified ZIP and temporary copies intact, exits with failure, and does not produce a successful full-release receipt. Any partial DMG must not be distributed. Successful DMG creation additionally requires an integrity check, read-only mount, exact app manifest and signature checks, and successful detach. Only then are the full `SHA256SUMS.txt` and `release-info.json` written.
+
 ## Independent local collector
 
 `scripts/collect-mac.mjs` collects this Mac's ActivityWatch activity, saved Codex token/settings records, and optional Wispr Flow or TypeWhisper statistics. It does not call SSH, inspect Windows/Ubuntu records, or publish combined cross-device totals. ActivityWatch must already be running locally. The Python readers use only the standard library.
