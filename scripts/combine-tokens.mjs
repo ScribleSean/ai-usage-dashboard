@@ -2,13 +2,20 @@ import {estimate} from './api-estimate.mjs';
 import {settingsCoverage} from './settings-coverage.mjs';
 
 const fields = ['inputTokens','cacheReadTokens','cacheCreationTokens','outputTokens','reasoningOutputTokens','totalTokens'];
-const valid = n => typeof n === 'number' && Number.isFinite(n) && n >= 0;
+const valid = n => Number.isSafeInteger(n) && n >= 0;
 const empty = () => Object.fromEntries(fields.map(k=>[k,0]));
 const add = (target, row) => fields.forEach(k=>{target[k]+=row[k];});
 
-export function verifyHostInventory(sources, inventories) {
-  if (sources.length !== 3 || ['Mac','Ubuntu','Windows'].some(host=>!sources.some(s=>s.host===host)) ||
-      sources.some(s=>s.status!=='ok' || !Array.isArray(s.days))) return {status:'unavailable'};
+export function verifyHostInventory(sources, inventories, expectedHosts=['Mac','Ubuntu','Windows']) {
+  // Pair configuration defines coverage. Never infer it from whichever peers responded.
+  if (!Array.isArray(expectedHosts) || ![2,3].includes(expectedHosts.length) ||
+      new Set(expectedHosts).size!==expectedHosts.length ||
+      !['Mac','Windows'].every(host=>expectedHosts.includes(host)) ||
+      expectedHosts.some(host=>!['Mac','Windows','Ubuntu'].includes(host)) ||
+      !Array.isArray(sources) || sources.length!==expectedHosts.length ||
+      expectedHosts.some(host=>sources.filter(s=>s?.host===host).length!==1) ||
+      sources.some(s=>s?.status!=='ok' || !Array.isArray(s.days))) return {status:'unavailable'};
+  if (!inventories || typeof inventories!=='object') return {status:'unverified'};
   const rows = sources.map(s=>inventories[s.host]);
   if (rows.some(r=>r?.status!=='ok' || !Array.isArray(r.keys) || !Array.isArray(r.parents) ||
     [...r.keys,...r.parents].some(k=>typeof k!=='string' || !/^[a-f0-9]{64}$/.test(k)))) return {status:'unverified'};
@@ -24,8 +31,8 @@ export function verifyHostInventory(sources, inventories) {
   return {status:sharedSessions || crossHostParents?'overlap':'verified',sharedSessions,crossHostParents};
 }
 
-export function combineTokens(sources, inventories) {
-  const verification = verifyHostInventory(sources,inventories);
+export function combineTokens(sources, inventories, expectedHosts) {
+  const verification = verifyHostInventory(sources,inventories,expectedHosts);
   if (verification.status !== 'verified') return {host:'All',status:verification.status,verification};
   const days=new Map();
   for (const source of sources) for (const row of source.days) {
@@ -37,10 +44,13 @@ export function combineTokens(sources, inventories) {
       return {host:'All',status:'inconsistent',verification};
     const day=days.get(row.date) || {date:row.date,...empty(),models:new Map()};
     add(day,row);
+    if(fields.some(k=>!valid(day[k])))return {host:'All',status:'inconsistent',verification};
     for (const m of row.models) {
       const key=m.model+':'+Boolean(m.inferred);
       const model=day.models.get(key) || {model:m.model,inferred:Boolean(m.inferred),...empty()};
-      add(model,m);day.models.set(key,model);
+      add(model,m);
+      if(fields.some(k=>!valid(model[k])))return {host:'All',status:'inconsistent',verification};
+      day.models.set(key,model);
     }
     days.set(row.date,day);
   }

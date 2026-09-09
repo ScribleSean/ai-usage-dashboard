@@ -42,3 +42,36 @@ test('combined settings only include individually reconciled host detail',()=>{
   const report=combineSettings(a,rows);
   assert.equal(report.profiles.length,1);assert.equal(report.profiles[0].totalTokens,70);
 });
+
+test('explicit two-device coverage does not require an unconfigured Ubuntu source',()=>{
+  const pair=sources().filter(s=>s.host!=='Ubuntu');
+  const report=combineTokens(pair,inventories(),['Mac','Windows']);
+  assert.equal(report.status,'ok');assert.equal(report.days[0].totalTokens,70);
+  assert.equal(combineTokens(pair,inventories()).status,'unavailable');
+  assert.equal(combineTokens(pair,inventories(),['Mac','Windows','Ubuntu']).status,'unavailable');
+  const overlap=inventories();overlap.Windows.keys=overlap.Mac.keys;
+  assert.equal(combineTokens(pair,overlap,['Mac','Windows']).status,'overlap');
+  assert.equal(combineTokens(pair,{},['Mac','Windows']).status,'unverified');
+});
+
+test('pair coverage rejects duplicate, unknown, missing and failed sources',()=>{
+  const pair=sources().filter(s=>s.host!=='Ubuntu');
+  for(const hosts of [[],['Mac'],['Mac','Mac'],['Mac','Windows','Other'],null])
+    assert.equal(combineTokens(pair,inventories(),hosts).status,'unavailable');
+  assert.equal(combineTokens([pair[0],pair[0]],inventories(),['Mac','Windows']).status,'unavailable');
+  assert.equal(combineTokens(sources(),inventories(),['Mac','Windows']).status,'unavailable');
+  assert.equal(combineTokens(null,inventories(),['Mac','Windows']).status,'unavailable');
+  assert.equal(combineTokens(pair,null,['Mac','Windows']).status,'unverified');
+  pair[1].status='unavailable';
+  assert.equal(combineTokens(pair,inventories(),['Mac','Windows']).status,'unavailable');
+});
+
+test('fractional or overflowed combined counters cannot publish imprecise totals',()=>{
+  const fractional=sources();fractional[0].days[0].inputTokens=0.5;
+  assert.equal(combineTokens(fractional,inventories()).status,'inconsistent');
+  const large=sources();
+  for(const source of large)for(const row of [source.days[0],source.days[0].models[0]]) {
+    row.inputTokens=Number.MAX_SAFE_INTEGER;row.totalTokens=Number.MAX_SAFE_INTEGER;
+  }
+  assert.equal(combineTokens(large,inventories()).status,'inconsistent');
+});

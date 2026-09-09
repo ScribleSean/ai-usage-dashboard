@@ -3,6 +3,7 @@ import {tokensFromSettings} from './windows-snapshot.mjs';
 import {cleanDictation} from './typewhisper.mjs';
 import {cleanWispr} from './wispr.mjs';
 import {retainActivityHistory} from './activity-history.mjs';
+import {createPeerPayload} from './peer-payload.mjs';
 
 export function macCollectorConfig(raw) {
   const keys=['activity','codex','wispr','typewhisper'];
@@ -11,18 +12,27 @@ export function macCollectorConfig(raw) {
   return {activity:raw.activity!==false,codex:raw.codex!==false,wispr:raw.wispr===true,typewhisper:raw.typewhisper===true};
 }
 
-export async function macSnapshot(rawConfig,readers,previous=[],at=new Date().toISOString()) {
+export async function macSnapshot(rawConfig,readers,previous=[],at=new Date().toISOString(),peerConfig=null) {
   const config=macCollectorConfig(rawConfig);
   if(!Number.isFinite(Date.parse(at)))throw Error('Invalid collection time');
   const disconnected=host=>({host,status:'not-connected'});
   const unavailable=host=>({host,status:'unavailable',checkedAt:at});
+  let peerActivity,peerCodex;
   const read=async(key,clean)=>{
     if(!config[key])return disconnected('Mac');
     try{return {...clean(await readers[key]()),checkedAt:at};}catch{return unavailable('Mac');}
   };
   const [activity,settings,wispr,typewhisper]=await Promise.all([
-    read('activity',raw=>{const {intervals,trackingIntervals,...safe}=cleanActivity(raw,'Mac');return safe;}),
-    read('codex',raw=>{const safe=cleanSettings(raw,'Mac');tokensFromSettings(safe,'Mac');return safe;}),
+    read('activity',raw=>{
+      const {intervals,trackingIntervals,...safe}=cleanActivity(raw,'Mac');
+      if(peerConfig)peerActivity={...raw,status:'ok'};
+      return safe;
+    }),
+    read('codex',raw=>{
+      const safe=cleanSettings(raw,'Mac');tokensFromSettings(safe,'Mac');
+      if(peerConfig)peerCodex={...safe,inventory:raw.inventory};
+      return safe;
+    }),
     read('wispr',raw=>cleanWispr(raw,'Mac')),
     read('typewhisper',raw=>cleanDictation(raw,'Mac')),
   ]);
@@ -37,5 +47,16 @@ export async function macSnapshot(rawConfig,readers,previous=[],at=new Date().to
   data.activityHistory=retainActivityHistory(previous,data.activity,at);
   const sources=[...data.activity,...data.tokens,...data.settings,...data.dictation].filter(source=>source.status!=='not-connected');
   const sourcesRead=sources.filter(source=>source.status==='ok').length;
-  return {data,status:{state:sources.length && sourcesRead===sources.length?'ok':'partial',sourcesRead,sourcesConfigured:sources.length}};
+  const result={data,status:{state:sources.length && sourcesRead===sources.length?'ok':'partial',sourcesRead,sourcesConfigured:sources.length}};
+  if(peerConfig) {
+    // This separate return value must never be included in dashboard JSON.
+    // Failed peer export must not prevent independent local collection.
+    try {
+      if(peerConfig.host!=='Mac')throw Error('Wrong local peer identity');
+      result.peer={status:'ready',payload:createPeerPayload({collectedAt:new Date(at).toISOString(),
+        activity:peerActivity || {status:activity.status},codex:[peerCodex || {host:'Mac',status:settings.status}],
+        dictation:[{...wispr,source:'Wispr Flow'},{...typewhisper,source:'TypeWhisper'}]},peerConfig)};
+    } catch {result.peer={status:'unavailable'};}
+  }
+  return result;
 }

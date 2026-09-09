@@ -14,6 +14,7 @@ These are planned milestones, not shipped capabilities or promised dates. See th
 
 ## 2. Independent collection and private sync
 
+- First-release direction agreed September 9: both the Mac and Windows apps show combined data from the two devices. This remains an implementation target, not a shipped capability.
 - Record on each device while offline, without another computer acting as coordinator.
 - Pair trusted devices over optional Tailscale transport.
 - Exchange sanitized records with authentication, stable identities and deduplication.

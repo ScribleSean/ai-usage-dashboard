@@ -20,7 +20,7 @@ Binary candidates retain their embedded source revisions even when later source-
 
 ## Required release gates still open
 
-- **Private connection:** settle the first-release sync direction, implement the agreed path using the existing authenticated route or optional Tailscale, and test disconnection, reconnection, repeated transfers, overlap handling and revocation. Preserve the working legacy collector until its replacement is verified.
+- **Private connection:** the September 9 decision is that both apps show combined Mac and Windows data. Implement the agreed bidirectional exchange using the existing authenticated route or optional Tailscale, and test disconnection, reconnection, repeated transfers, overlap handling and revocation. Preserve the working legacy collector until its replacement is verified. This decision does not mean device exchange is already implemented or enabled.
 - **Mac DMG:** complete creation, integrity, read-only mount and content checks. A development attempt stalled in macOS authorization. ZIP verification does not satisfy this gate, and system protections must not be disabled.
 - **Clean environment:** verify installation and first launch without development dependencies. Exercise the documented supported OS/runtime prerequisites and disclose untested versions.
 - **Lifecycle:** verify actual login startup and sleep/wake, idle and collection resource use, and orderly shutdown on both platforms. A short all-sources-disabled Mac baseline was about 69 MiB for the native process only; it does not establish normal collection cost or total WebKit memory.

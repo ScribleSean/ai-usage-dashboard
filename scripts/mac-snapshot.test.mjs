@@ -55,3 +55,30 @@ test('local ActivityWatch reader exposes ISO intervals for exactly one normaliza
     assert.ok(!JSON.stringify(raw).includes('PRIVATE'));
   } finally {globalThis.fetch=prior;}
 });
+
+test('optional private peer export uses the same reads and never enters dashboard data',async()=>{
+  let codexReads=0,activityReads=0;
+  const config={host:'Mac',comparisonId:'a'.repeat(64),codexHosts:['Mac']};
+  const result=await macSnapshot({}, {
+    activity:async()=>{activityReads++;return {start:'2026-09-08T12:00:00Z',end:at,
+      intervals:[{start:'2026-09-08T13:00:00Z',end:'2026-09-08T13:01:00Z',category:'Editors',title:'PRIVATE'}]};},
+    codex:async()=>{codexReads++;return {...settings,inventory:{status:'ok',keys:['b'.repeat(64)],parents:[]}};},
+  },[],at,config);
+  assert.equal(codexReads,1);assert.equal(activityReads,1);assert.equal(result.peer.status,'ready');
+  assert.equal(result.peer.payload.codex[0].profiles[0].totalTokens,result.data.tokens[0].days[0].totalTokens);
+  assert.equal(result.peer.payload.activity.intervals.length,1);
+  assert.equal(result.data.activity[0].intervals,undefined);
+  assert.ok(!JSON.stringify(result).includes('PRIVATE'));
+  assert.ok(!JSON.stringify(result.data).includes('b'.repeat(64)));
+  assert.ok(!JSON.stringify(result.status).includes('inventory'));
+});
+
+test('missing peer evidence leaves local collection intact',async()=>{
+  const readers={activity:async()=>{throw Error('PRIVATE');},codex:async()=>settings};
+  const result=await macSnapshot({},readers,[],at,{host:'Mac',comparisonId:'a'.repeat(64),codexHosts:['Mac']});
+  assert.equal(result.peer.status,'unavailable');assert.equal(result.data.tokens[0].status,'ok');
+  assert.equal(result.data.tokens[0].days[0].totalTokens,10);
+  assert.ok(!JSON.stringify(result).includes('PRIVATE'));
+  const unpaired=await macSnapshot({},readers,[],at);
+  assert.equal(unpaired.peer,undefined);
+});

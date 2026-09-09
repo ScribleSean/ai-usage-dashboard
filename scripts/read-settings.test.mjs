@@ -92,3 +92,68 @@ with tempfile.TemporaryDirectory() as directory:
   assert.equal(result.status,'ok');assert.equal(result.profiles[0].totalTokens,110);
   assert.ok(!output.includes('PRIVATE'));
 });
+
+test('private file cache warms within budget and preserves exact totals across reuse, append and truncation',()=>{
+  const fixture=code.slice(0,code.indexOf('print(json.dumps'))+`
+import pathlib,tempfile,os,sqlite3
+exec(pathlib.Path('scripts/read-settings-cache.py').read_text(encoding='utf-8'),m.__dict__)
+events=json.load(sys.stdin)
+stamp=dt.datetime.now(dt.timezone.utc).isoformat()
+for event in events: event['timestamp']=stamp
+with tempfile.TemporaryDirectory() as directory:
+    root=pathlib.Path(directory).resolve(); logs=root/'logs'; (logs/'sessions').mkdir(parents=True)
+    cache=root/'cache'; cache.mkdir(mode=0o700)
+    def content(identity,rows):
+        return '\\n'.join(json.dumps(e) for e in [dict(type='session_meta',payload=dict(id=identity,note='PRIVATE_META'))]+rows)+'\\n'
+    one=logs/'sessions/one.jsonl'; two=logs/'sessions/two.jsonl'
+    one.write_text(content('PRIVATE_ONE',events),encoding='utf-8')
+    two.write_text(content('PRIVATE_TWO',events),encoding='utf-8')
+    expected=m.collect(logs)
+    m.CACHE_DIRECTORY=str(cache); m.CACHE_SCAN_BUDGET=max(one.stat().st_size,two.stat().st_size)+10
+    try:
+        m.collect(logs)
+        raise AssertionError('Incomplete warmup reported success')
+    except ValueError as error:
+        assert 'warming' in str(error)
+    assert m.collect(logs)==expected
+    with sqlite3.connect(cache/'events.sqlite') as db:
+        assert db.execute('select count(*) from events').fetchone()[0]==2
+    db.close()
+    check=m.SettingsCache(cache); check.events(one,one.stat()); check.events(two,two.stat())
+    assert check.hits==2 and check.scanned_bytes==0; check.close()
+    with sqlite3.connect(cache/'events.sqlite') as db:
+        db.execute("UPDATE events SET data='[null]' WHERE key=(SELECT key FROM events LIMIT 1)")
+    db.close()
+    assert m.collect(logs)==expected
+    m.CACHE_SCAN_BUDGET=100000
+    appended=dict(events[-1]); appended['payload']=dict(type='token_count',info=dict(total_token_usage=dict(input_tokens=200,cached_input_tokens=100,cache_write_input_tokens=0,output_tokens=20,reasoning_output_tokens=10,total_tokens=220)))
+    one.write_text(content('PRIVATE_ONE',events+[appended]),encoding='utf-8')
+    cached=m.collect(logs); saved=m.CACHE_DIRECTORY; del m.CACHE_DIRECTORY
+    assert cached==m.collect(logs); m.CACHE_DIRECTORY=saved
+    one.write_text(content('PRIVATE_ONE',events[:1]),encoding='utf-8')
+    cached=m.collect(logs); del m.CACHE_DIRECTORY
+    assert cached==m.collect(logs)
+    assert b'PRIVATE' not in (cache/'events.sqlite').read_bytes()
+    print(json.dumps(dict(ok=True)))
+`;
+  const call={timestamp:'2026-09-06T12:00:00Z',type:'response_item',payload:{type:'function_call',name:'exec_command',namespace:'functions',call_id:'PRIVATE_CALL_ID',arguments:'PRIVATE_ARGUMENTS'}};
+  const output=execPython(['-c',fixture],{input:JSON.stringify([settings('high','standard'),call,call,usage(100)])}).toString();
+  assert.deepEqual(JSON.parse(output),{ok:true});
+});
+
+test('cached allowlisted events reproduce rolling cutoff, reset and setting semantics without private text',()=>{
+  const fixture=code.slice(0,code.indexOf('print(json.dumps'))+`
+import pathlib
+exec(pathlib.Path('scripts/read-settings-cache.py').read_text(encoding='utf-8'),m.__dict__)
+events=json.load(sys.stdin)
+safe=[value for event in events if (value:=m.cache_event(event)) is not None]
+assert all(m.cache_event(event,cached=True)==event for event in safe)
+for cutoff in [dt.datetime(2026,9,6,12,0,tzinfo=dt.timezone.utc),dt.datetime(2026,9,6,12,2,tzinfo=dt.timezone.utc)]:
+    assert m.summarize(events,cutoff)==m.summarize(safe,cutoff)
+assert 'PRIVATE' not in json.dumps(safe)
+print(json.dumps(dict(ok=True)))
+`;
+  const reset=usage(20);reset.timestamp='2026-09-06T12:03:00Z';reset.payload.info.last_token_usage=usage(50).payload.info.total_token_usage;
+  const output=execPython(['-c',fixture],{input:JSON.stringify([settings('ultra','priority'),usage(100),usage(100),settings('medium','default'),reset,reset])}).toString();
+  assert.deepEqual(JSON.parse(output),{ok:true});
+});

@@ -128,6 +128,34 @@ def summarize(events, cutoff):
             row[dest] += value
     return list(profiles.values()), [dict(date=d,category=c,tool=t,namespace=s,count=n) for (d,c,t,s),n in tools.items()]
 
+def summarize_sessions(sessions, cutoff, cache):
+    profiles, tools = {}, {}
+    for file, info in sessions.values():
+        def events():
+            with file.open(encoding='utf-8') as stream:
+                for line in stream:
+                    if len(line) > 8_000_000:
+                        continue
+                    try:
+                        row = json.loads(line)
+                        if isinstance(row, dict):
+                            yield row
+                    except ValueError:
+                        pass
+        rows, calls = summarize(cache.events(file, info) if cache else events(), cutoff)
+        for row in rows:
+            key = (row['date'], row['model'], row['effort'], row['speed'])
+            if key not in profiles:
+                profiles[key] = row
+            else:
+                for field in ('inputTokens', 'cacheReadTokens', 'cacheCreationTokens', 'outputTokens', 'reasoningOutputTokens', 'totalTokens'):
+                    profiles[key][field] += row[field]
+        for row in calls:
+            key = (row['date'], row['category'], row['tool'], row['namespace'])
+            tools[key] = tools.get(key, 0) + row['count']
+    return profiles, tools
+
+
 def collect(folder):
     root = pathlib.Path(folder).resolve(strict=True)
     cutoff = dt.datetime.now(dt.timezone.utc)-dt.timedelta(days=8)
@@ -162,34 +190,19 @@ def collect(folder):
         if info.st_mtime < cutoff.timestamp():
             continue
         identity = identity or str(file)
-        if identity not in sessions or info.st_size > sessions[identity][1]:
-            sessions[identity] = (file,info.st_size)
-    if sum(size for _,size in sessions.values()) > 1_000_000_000:
+        if identity not in sessions or info.st_size > sessions[identity][1].st_size:
+            sessions[identity] = (file,info)
+    cache = SettingsCache(globals()['CACHE_DIRECTORY'], globals().get('CACHE_SCAN_BUDGET', 1_000_000_000)) if globals().get('CACHE_DIRECTORY') else None
+    if not cache and sum(info.st_size for _,info in sessions.values()) > 1_000_000_000:
         raise ValueError('Report exceeds scan budget')
-    profiles, tools = {}, {}
-    for file, _ in sessions.values():
-        def events():
-            with file.open(encoding='utf-8') as stream:
-                for line in stream:
-                    if len(line) > 8_000_000:
-                        continue
-                    try:
-                        row = json.loads(line)
-                        if isinstance(row,dict):
-                            yield row
-                    except ValueError:
-                        pass
-        rows, calls = summarize(events(), cutoff)
-        for row in rows:
-            key=(row['date'],row['model'],row['effort'],row['speed'])
-            if key not in profiles:
-                profiles[key]=row
-            else:
-                for field in ('inputTokens','cacheReadTokens','cacheCreationTokens','outputTokens','reasoningOutputTokens','totalTokens'):
-                    profiles[key][field]+=row[field]
-        for row in calls:
-            key=(row['date'],row['category'],row['tool'],row['namespace'])
-            tools[key]=tools.get(key,0)+row['count']
+    try:
+        profiles, tools = summarize_sessions(sessions, cutoff, cache)
+    finally:
+        if cache:
+            cache.close()
+    if cache:
+        if cache.pending:
+            raise ValueError('Private Codex cache warming; complete report unavailable')
     result = dict(status='ok',profiles=list(profiles.values()),tools=[dict(date=d,category=c,tool=t,namespace=s,count=n) for (d,c,t,s),n in sorted(tools.items())],scope='Recent saved Codex logs only')
     if salt:
         result['inventory'] = {k:sorted(v) if isinstance(v,set) else v for k,v in inventory.items()}
