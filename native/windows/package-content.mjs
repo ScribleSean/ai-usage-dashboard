@@ -1,7 +1,9 @@
-const forbiddenNames=new Set(['usage.json','collector.json','collector.config.json','local.config.json','.env','__pycache__','webviewcache','node_modules','.git']);
+const forbiddenNames=new Set(['usage.json','collector.json','collector.config.json','local.config.json','.env','__pycache__','webviewcache','node_modules','.git',
+  'private-quota','private-codex','private-sync']);
 
 export function forbiddenPackageName(name) {
-  return forbiddenNames.has(name.toLowerCase()) || /\.(pdb|jsonl|sqlite|sqlite3|db)$/i.test(name) || /^\.env\./i.test(name);
+  return forbiddenNames.has(name.toLowerCase()) || /\.(pdb|jsonl|(?:sqlite3?|db)(?:-wal|-shm|-journal)?)$/i.test(name) ||
+    /^private-sync-retired-/i.test(name) || /^\.env\./i.test(name);
 }
 
 function lowerAscii(bytes) {

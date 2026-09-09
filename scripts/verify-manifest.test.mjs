@@ -22,6 +22,15 @@ test('literal Windows package names reject traversal, script syntax and private 
     assert.equal(validPackagePath(value),true,value);
 });
 test('verified manifest is read without being replaced',()=>fixture((root,manifest)=>assert.deepEqual(verifyManifest(root),manifest)));
+test('Windows manifests reject quota journals even when their checksum and inventory match',()=>fixture((root,manifest,save)=>{
+  const bytes=Buffer.from('synthetic test bytes');
+  rmSync(path.join(root,'example.txt'));
+  writeFileSync(path.join(root,'state.sqlite-wal'),bytes);
+  manifest.files[0].path='state.sqlite-wal';save();
+  assert.throws(()=>verifyManifest(root),/Invalid manifest file entry/);
+  assert.equal(validPackagePath('Web/assets/private-quota/retained.txt'),false);
+  assert.equal(validPackagePath('Resources/private-sync-retired-fixture/retained.txt'),false);
+}));
 test('dirty source requires an explicit development option',()=>fixture((root,manifest,save)=>{
   manifest.sourceDirty=true;save();assert.throws(()=>verifyManifest(root));assert.equal(verifyManifest(root,{allowDirty:true}).sourceDirty,true);
 }));

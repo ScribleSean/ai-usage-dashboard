@@ -21,6 +21,9 @@ async function fixture(t) {
   };
   for(const base of ['private-sync','dist/client/private-sync','dist/client/assets/private-sync','public/local'])
     for(const name of ['pairing.json','setup.pending.json'])files[`${base}/${name}`]='{"privateCanary":true}';
+  for(const base of ['private-quota','dist/client/private-quota','dist/client/assets/private-quota','public/local'])
+    for(const name of ['state.sqlite','state.sqlite-journal','state.sqlite-wal','state.sqlite-shm','account.json'])
+      files[`${base}/${name}`]='{"privateCanary":true}';
   for(const [relative,contents] of Object.entries(files)) {
     const file=path.join(root,relative);await mkdir(path.dirname(file),{recursive:true});await writeFile(file,contents);
   }
@@ -67,4 +70,13 @@ test('public snapshot routes reject a linked file and a linked parent directory'
   await symlink(privateDirectory,local);
   const result=await request('/local/usage.json');
   assert.equal(result.status,404);assert.equal(result.body.includes('privateCanary'),false);
+});
+
+test('private quota databases and journals are not static routes even when copied into public assets',async t=>{
+  const {request}=await fixture(t);
+  for(const base of ['/private-quota','/assets/private-quota','/local'])
+    for(const name of ['state.sqlite','state.sqlite-journal','state.sqlite-wal','state.sqlite-shm','account.json']) {
+      const route=base+'/'+name,response=await request(route);
+      assert.equal(response.status,404,route);assert.equal(response.body.includes('privateCanary'),false,route);
+    }
 });

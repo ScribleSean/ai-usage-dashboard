@@ -6,6 +6,13 @@ test('package guard rejects private data, cache and debug names without dependin
   for(const name of ['usage.json','Usage.JSON','COLLECTOR.CONFIG.JSON','.env.local','capture.sqlite','session.JSONL','app.PDB','__pycache__','WebViewCache'])assert.equal(forbiddenPackageName(name),true,name);
   for(const name of ['LICENSE.txt','node.exe','python313.zip','package-manifest.json'])assert.equal(forbiddenPackageName(name),false,name);
 });
+test('package guard rejects private runtime directories and detached SQLite sidecars',()=>{
+  for(const name of ['private-quota','PRIVATE-QUOTA','private-codex','private-sync','private-sync-retired-fixture',
+    'state.sqlite-wal','state.sqlite-shm','state.sqlite-journal','cache.SQLITE3-WAL','cache.db-journal'])
+    assert.equal(forbiddenPackageName(name),true,name);
+  for(const name of ['quota-store.mjs','private-sync-acl.ps1','_sqlite3.so','sqlite3.dll','state-machine.js'])
+    assert.equal(forbiddenPackageName(name),false,name);
+});
 test('package guard detects plain, escaped, UTF-16 and case-varied build paths',()=>{
   const root='C:\\Users\\SyntheticBuilder';
   for(const value of [root,root.toUpperCase(),root.replaceAll('\\','/'),JSON.stringify(root).slice(1,-1)]) {

@@ -59,6 +59,20 @@ test('Mac package inspection rejects private filenames and encoded build paths',
   });
 });
 
+test('Mac package inspection rejects private quota directories and journal fragments',()=>{
+  fixture(({bundle})=>{
+    const resources=path.join(bundle,'Contents/Resources');
+    const directory=path.join(resources,'private-quota');
+    mkdirSync(directory);
+    writeFileSync(path.join(directory,'orphan.txt'),'synthetic private canary');
+    assert.throws(()=>inspectMacPackage(bundle),/Private/);
+    rmSync(directory,{recursive:true});
+    const journal=path.join(resources,'state.sqlite-journal');
+    writeFileSync(journal,'synthetic private canary');
+    assert.throws(()=>inspectMacPackage(bundle),/Private/);
+  });
+});
+
 test('Mac package links must remain inside the app and match the manifest', {skip:process.platform==='win32'},()=>{
   fixture(({bundle})=>{
     const link=path.join(bundle,'Contents/Resources/Runtime/python/bin/python3');
