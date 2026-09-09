@@ -9,6 +9,7 @@ import { readQuota } from './read-quota.mjs';
 import { pythonReport } from './python-report.mjs';
 import { readSettingsSnapshot } from './settings-snapshot.mjs';
 import { combineTokens, combineSettings } from './combine-tokens.mjs';
+import { combineActivity } from './combine-activity.mjs';
 import { randomBytes } from 'node:crypto';
 import { powershellCommand } from './powershell-command.mjs';
 import { hostname, homedir } from 'node:os';
@@ -265,14 +266,7 @@ export async function collect() {
     ),host));
     return {...result,source};
   })));
-  const readable = [mac, windows].filter(x => x.status === 'ok' && x.intervals);
-  const combined = readable.length === 2 ? (() => {
-    const start = new Date(Math.max(...readable.map(x => Date.parse(x.start)))).toISOString();
-    const end = new Date(Math.min(...readable.map(x => Date.parse(x.end)))).toISOString();
-    const intervals = readable.flatMap(x => x.intervals).map(r => ({ ...r, start: Math.max(r.start, Date.parse(start)), end: Math.min(r.end, Date.parse(end)) })).filter(r => r.end > r.start);
-    const tracking = readable.every(x=>Array.isArray(x.trackingIntervals)) ? readable.flatMap(x=>x.trackingIntervals).map(r=>({...r,start:Math.max(r.start,Date.parse(start)),end:Math.min(r.end,Date.parse(end))})).filter(r=>r.end>r.start) : undefined;
-    return { host: 'Combined', status: 'ok', start, end, ...summarizeTracked(intervals, tracking, start, end) };
-  })() : { host: 'Combined', status: 'unavailable' };
+  const combined = combineActivity([mac, windows]);
   const combinedTokens = combineTokens(tokenSources,inventories);
   const data = {
     schema: 2,
