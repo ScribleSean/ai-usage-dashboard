@@ -1,5 +1,6 @@
 """Read only TypeWhisper's aggregate statistics, never history or audio stores."""
 import datetime as dt
+from contextlib import closing
 import json
 import math
 import os
@@ -38,6 +39,7 @@ def regular_file(file):
     # Reject symlinked parent directories too, including source routing changes.
     if any(parent.is_symlink() for parent in file.parents):
         raise ValueError('Unsupported statistics path')
+    return info
 
 
 def engines(raw, separator, total):
@@ -70,7 +72,7 @@ def day(date, count, words, seconds, models, separator):
 
 def read_mac(file):
     regular_file(file)
-    with sqlite3.connect(file.as_uri() + '?mode=ro', uri=True, timeout=2) as db:
+    with closing(sqlite3.connect(file.as_uri() + '?mode=ro', uri=True, timeout=2)) as db:
         db.execute('PRAGMA query_only=ON')
         columns = {row[1] for row in db.execute('PRAGMA table_info(ZUSAGESTATISTICSDAY)')}
         required = {'ZDAY', 'ZTRANSCRIPTIONCOUNT', 'ZTOTALWORDS', 'ZTOTALDURATIONSECONDS'}
@@ -90,13 +92,16 @@ def read_mac(file):
 
 
 def read_windows(file):
-    regular_file(file)
-    fd = os.open(file, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    before = regular_file(file)
+    fd = os.open(file, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_NONBLOCK', 0) | getattr(os, 'O_BINARY', 0))
     with os.fdopen(fd, 'r', encoding='utf-8-sig') as stream:
         info = os.fstat(stream.fileno())
-        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_BYTES:
+        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_BYTES or (info.st_dev, info.st_ino) != (before.st_dev, before.st_ino):
             raise ValueError('Unsupported statistics file')
         text = stream.read(MAX_BYTES + 1)
+        after = regular_file(file)
+        if (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns) != (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns):
+            raise ValueError('Changing statistics file')
     if len(text) > MAX_BYTES:
         raise ValueError('Statistics limit exceeded')
     raw = json.loads(text)

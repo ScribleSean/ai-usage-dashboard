@@ -16,7 +16,7 @@ Pass `-Dotnet C:\path\to\dotnet.exe` for a private SDK installation. The script 
 
 The icon is committed as a small generated asset. Its source is the canonical [telescope mark](../public/brand/telescope.svg). Regenerating that asset currently uses the Mac icon tool, but ordinary Windows builds do not require a Mac.
 
-The build runs native snapshot and startup-contract tests, plus Windows collector-contract tests. It does not prove the UI works on a signed-in desktop. Run the executable from `native\windows\bin\Release\net10.0-windows` to inspect the tray and dashboard.
+The build runs native snapshot and startup-contract tests plus the JavaScript and reader test suite. Five POSIX runner tests explicitly skip on Windows because the Windows app uses its native collector, not the `flock` and process-group runner. The suite passed 99 tests on the development Windows host; all 104 remain applicable to POSIX CI. This does not prove the UI works on a signed-in desktop. Run the executable from `native\windows\bin\Release\net10.0-windows` to inspect the tray and dashboard.
 
 ## Prepare a package candidate
 
@@ -27,6 +27,16 @@ The build runs native snapshot and startup-contract tests, plus Windows collecto
 This runs the development build and publishes a fresh candidate under `native\windows\release\candidate-ID\Workspace Observatory`. It bundles Node, Python, timezone data and .NET, so the packaged app does not require separate installations of those runtimes. Microsoft Edge WebView2 Runtime remains a system prerequisite.
 
 Runtime archives have pinned download URLs and SHA-256 digests. The package includes dependency notices and a file-hash manifest. Packaging rejects known private data filenames, linked entries, debug symbols, Python bytecode-cache directories and detected build-machine paths. The manifest records the source revision and whether the checkout had uncommitted changes. A dirty candidate is not a versioned release.
+
+Recheck an existing candidate without replacing its manifest:
+
+```powershell
+node .\native\windows\verify-manifest.mjs 'C:\absolute\path\Workspace Observatory'
+```
+
+This rejects modified, additional or missing payload files, invalid Windows paths, linked entries and dirty-source manifests. For development candidates only, add `--allow-dirty`; file verification still applies. The manifest is an integrity inventory, not a publisher signature or a substitute for the package privacy inspection.
+
+Installer-tool preparation uses the pinned NSIS archive in `native/windows/installer-tool.json`. Its SHA-256 was computed after matching the official release listing's SHA-1 over an HTTPS download. It is not a vendor-published SHA-256. The compiler stays in the Windows build cache and is not installed system-wide. Installer generation and install/uninstall verification remain pending.
 
 `-SkipWebBuild` is an explicit development shortcut for packaging-only changes after a successful dashboard build. Do not use it for final release verification. Windows downloads, dependency caches and output stay on the Windows machine.
 

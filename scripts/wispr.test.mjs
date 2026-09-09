@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
+import {execPython} from './test-python.mjs';
 import {cleanWispr,summarizeWispr} from './wispr.mjs';
 
 test('Wispr reads numeric metadata only, groups timezone boundaries and preserves coverage',()=>{
@@ -14,6 +14,7 @@ with tempfile.TemporaryDirectory() as tmp:
   with sqlite3.connect(p) as db:
    db.execute('CREATE TABLE History (timestamp TEXT,duration FLOAT,numWords INTEGER,transcript TEXT,audio BLOB)')
    db.executemany('INSERT INTO History VALUES (?,?,?,?,?)', [('2026-09-09 01:00:00.000 +00:00',60,10,'PRIVATE',b'PRIVATE'),('2026-09-09T03:00:00+00:00',None,None,'PRIVATE',b'PRIVATE'),('2026-09-09T05:00:00+00:00',0,0,'PRIVATE',b'PRIVATE')])
+  db.close()
   result=m.report(root,mode)
   assert result['days'][0]['date']=='2026-09-08'
   assert result['days'][0]['transcriptions']==2
@@ -21,7 +22,7 @@ with tempfile.TemporaryDirectory() as tmp:
   assert result['days'][1]['audioRecords']==1
   print(json.dumps(result))
 `;
-  const output=execFileSync('python3',['-c',code],{encoding:'utf8'});
+  const output=execPython(['-c',code],{encoding:'utf8'});
   assert.ok(!output.includes('PRIVATE'));
   for (const line of output.trim().split('\n')) {
     const safe=cleanWispr(JSON.parse(line),'Mac');

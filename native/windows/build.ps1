@@ -36,8 +36,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Windows build failed.' }
     & $Dotnet native/windows/bin/Release/net10.0-windows/WorkspaceObservatory.dll --self-test
     if ($LASTEXITCODE -ne 0) { throw 'Windows self-tests failed.' }
-    & $node --test scripts/windows-snapshot.test.mjs scripts/read-settings.test.mjs scripts/web-licenses.test.mjs scripts/package-content.test.mjs
-    if ($LASTEXITCODE -ne 0) { throw 'Windows collector contract tests failed.' }
+    & $node --test scripts/*.test.mjs
+    if ($LASTEXITCODE -ne 0) { throw 'Windows JavaScript and reader contract tests failed.' }
     Write-Output 'Windows development build passed. This is not a self-contained release or installer.'
 } finally {
     Pop-Location

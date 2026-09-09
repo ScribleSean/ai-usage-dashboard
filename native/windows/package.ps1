@@ -91,6 +91,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Packaged Node check failed.' }
     & (Join-Path $runtime 'node.exe') (Join-Path $PSScriptRoot 'inspect-package.mjs') $app
     if ($LASTEXITCODE -ne 0) { throw 'Package content verification failed.' }
+    & (Join-Path $runtime 'node.exe') (Join-Path $PSScriptRoot 'verify-manifest.mjs') $app --allow-dirty
+    if ($LASTEXITCODE -ne 0) { throw 'Package manifest verification failed.' }
     Write-Output "Candidate prepared at $app"
     Write-Output 'Not a release yet. Complete license, packaged-collector and desktop checks before distributing.'
 } finally {

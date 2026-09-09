@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
+import {execPython} from './test-python.mjs';
 import {cleanDictation,summarizeDictation} from './typewhisper.mjs';
 
 const row = {date:'2026-09-08',transcriptions:2,words:12,audioSeconds:7,engines:[{engine:'Apple Speech',transcriptions:2}]};
@@ -30,6 +30,7 @@ with tempfile.TemporaryDirectory() as tmp:
   db.execute('INSERT INTO ZUSAGESTATISTICSDAY VALUES (?,?,?,?,?)',(810518400,2,12,7,json.dumps({'Apple Speech||PRIVATE_ALIAS':2})))
   db.execute('CREATE TABLE PRIVATE_HISTORY (TRANSCRIPT TEXT)')
   db.execute("INSERT INTO PRIVATE_HISTORY VALUES ('PRIVATE_TRANSCRIPT')")
+ db.close()
  mac_result=m.read_mac(mac)
  win=root/'stats.json'
  win.write_text(json.dumps({'version':1,'days':[{'day':'2026-09-08T00:00:00','transcriptionCount':2,'totalWords':12,'totalDurationSeconds':7,'modelCounts':{'sherpa-onnx'+chr(31)+'PRIVATE_ALIAS':2},'appCounts':{'PRIVATE_APP':2}}]}))
@@ -42,7 +43,7 @@ with tempfile.TemporaryDirectory() as tmp:
   candidate=root/relative;candidate.parent.mkdir(parents=True,exist_ok=True);candidate.write_text(win.read_text())
  assert m.report('windows',root)=={'status':'ambiguous'}
  print(json.dumps([mac_result,win_result]))`;
-  const text=execFileSync('python3',['-c',code],{env:{...process.env,TZ:'UTC'}}).toString();
+  const text=execPython(['-c',code],{env:{...process.env,TZ:'UTC'}}).toString();
   assert.ok(!text.includes('PRIVATE'));
   const [mac,win]=JSON.parse(text);
   assert.equal(mac[0].words,12);

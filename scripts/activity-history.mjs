@@ -1,5 +1,5 @@
 import {categories,appLabels,timezone} from './activity-timeline.mjs';
-import {open} from 'node:fs/promises';
+import {open,lstat} from 'node:fs/promises';
 import {constants} from 'node:fs';
 const dateFormat=new Intl.DateTimeFormat('en-CA',{timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit'});
 const dateKey=value=>dateFormat.format(new Date(value));
@@ -45,13 +45,19 @@ export function retainActivityHistory(previous,current,collectedAt,maxDates=3650
 export async function previousActivityHistory(file) {
   let handle;
   try {
+    // O_NOFOLLOW is unavailable on Windows. Check the named entry explicitly
+    // on every platform, then ensure the opened file matches that entry.
+    const entry=await lstat(file);
+    if(!entry.isFile() || entry.isSymbolicLink())throw Error('Invalid previous snapshot');
     handle=await open(file,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
     const info=await handle.stat();
-    if(!info.isFile() || info.size>16_000_000) throw Error('Invalid previous snapshot');
+    if(!info.isFile() || info.size>16_000_000 || info.dev!==entry.dev || info.ino!==entry.ino) throw Error('Invalid previous snapshot');
     const buffer=Buffer.alloc(info.size+1);
     const {bytesRead}=await handle.read(buffer,0,buffer.length,0);
     const after=await handle.stat();
-    if(bytesRead!==info.size || after.size!==info.size || after.mtimeMs!==info.mtimeMs) throw Error('Changing previous snapshot');
+    const named=await lstat(file);
+    if(bytesRead!==info.size || after.size!==info.size || after.mtimeMs!==info.mtimeMs ||
+      named.isSymbolicLink() || named.dev!==info.dev || named.ino!==info.ino) throw Error('Changing previous snapshot');
     const value=JSON.parse(buffer.subarray(0,bytesRead).toString('utf8'));
     if(Array.isArray(value.activityHistory)) return value.activityHistory;
     return retainActivityHistory([], [value.combined,...(value.activity||[])].filter(Boolean),value.collectedAt);
