@@ -1,6 +1,29 @@
 import Foundation
 
 func runSelfTests() {
+    precondition((try? CollectorConfiguration.validate([:])) == CollectorConfiguration.defaults)
+    precondition((try? CollectorConfiguration.validate(["wispr": true]))?["wispr"] == true)
+    precondition((try? CollectorConfiguration.validate(["codex": 1])) == nil)
+    precondition((try? CollectorConfiguration.validate(["remote": true])) == nil)
+    precondition((try? CollectorConfiguration.validate(["wispr": "true"])) == nil)
+    do {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("observatory-config-test-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let prepared = try CollectorConfiguration.prepare(runtime: directory)
+        let initial = try CollectorConfiguration.read(runtime: directory)
+        precondition(prepared && initial == CollectorConfiguration.defaults)
+        try CollectorConfiguration.save(["activity": false, "codex": false, "wispr": true, "typewhisper": false], runtime: directory)
+        let updated = try CollectorConfiguration.read(runtime: directory)
+        precondition(updated["wispr"] == true)
+        let config = directory.appendingPathComponent("collector.config.json")
+        try Data("{\"codex\":1}".utf8).write(to: config)
+        precondition((try? CollectorConfiguration.prepare(runtime: directory)) == nil)
+        try FileManager.default.removeItem(at: config)
+        try Data("{}".utf8).write(to: directory.appendingPathComponent("local.config.json"))
+        let legacy = try CollectorConfiguration.prepare(runtime: directory)
+        precondition(legacy == false)
+        precondition(!FileManager.default.fileExists(atPath: config.path))
+    } catch { preconditionFailure("Collector configuration self-test failed") }
     precondition(number(true) == nil)
     precondition(number(-1) == nil)
     precondition(number(Double.infinity) == nil)
@@ -40,4 +63,28 @@ func runSelfTests() {
         precondition(resolver.resolve(URL(string: url)!) == nil, "Unsafe asset URL accepted")
     }
     print("Native self-tests passed")
+}
+
+func runCollectorSelfTest() {
+    do {
+        guard let resources = Bundle.main.resourceURL else { throw CocoaError(.fileReadNoSuchFile) }
+        let runtime = FileManager.default.temporaryDirectory.appendingPathComponent("observatory-collector-test-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: runtime) }
+        _ = try CollectorConfiguration.prepare(runtime: runtime)
+        try CollectorConfiguration.save(Dictionary(uniqueKeysWithValues: CollectorConfiguration.defaults.keys.map { ($0, false) }), runtime: runtime)
+        let launch = try CollectorConfiguration.launch(runtime: runtime, resources: resources, local: true)
+        let task = Process()
+        task.executableURL = launch.executable
+        task.arguments = launch.arguments
+        task.currentDirectoryURL = runtime
+        task.environment = ["PATH": "/usr/bin:/bin", "HOME": runtime.path]
+        try task.run()
+        task.waitUntilExit()
+        precondition(task.terminationStatus == 0)
+        let object = readObject(runtime.appendingPathComponent("public/local/usage.json"))
+        precondition(number(object?["schema"]) == 2)
+        let status = readObject(runtime.appendingPathComponent("public/local/collector.json"))
+        precondition(number(status?["sourcesConfigured"]) == 0)
+        print("Packaged collector self-test passed with all sources disabled")
+    } catch { preconditionFailure("Packaged collector self-test failed") }
 }

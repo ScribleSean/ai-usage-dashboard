@@ -1,4 +1,5 @@
 import {spawn} from 'node:child_process';
+import {realpathSync} from 'node:fs';
 import {readFile,writeFile,mkdir,rename,lstat,unlink} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import {homedir} from 'node:os';
@@ -59,5 +60,7 @@ export async function collectMac(runtime,python) {
   console.log(JSON.stringify(status));
 }
 
-if(process.argv[1]===fileURLToPath(import.meta.url))collectMac(process.env.OBSERVATORY_RUNTIME || '',process.env.OBSERVATORY_PYTHON)
+// macOS presents /var and /private/var as aliases. Compare filesystem identities,
+// not spelling, so launching from an app bundle in a temporary folder still runs.
+if(process.argv[1] && realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url)))collectMac(process.env.OBSERVATORY_RUNTIME || '',process.env.OBSERVATORY_PYTHON)
   .catch(()=>{console.error('Mac collection unavailable');process.exitCode=1;});

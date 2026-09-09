@@ -1,6 +1,30 @@
-# Mac development preview
+# Mac development candidate
 
-The existing Apple Silicon app uses a SwiftUI menu-bar panel and a system WebKit dashboard. Its current installed-preview workflow still uses external Node/Python installations and the legacy collector configuration. Self-contained runtime packaging and integration of the new local collector into the app are pending.
+The Apple Silicon app uses a SwiftUI menu-bar panel and a system WebKit dashboard. The 0.3.0 development candidate bundles Node and Python and can run the local collector without a checkout or separately installed runtimes. It is not yet a published, clean-install-verified release. Existing installed previews retain their legacy cross-device configuration and external runtimes.
+
+New installations create private local source settings. ActivityWatch and saved Codex usage are enabled by default. Wispr and TypeWhisper are off until selected in **Local source settings**. Changes apply to the next collection. The app does not automatically convert an existing cross-device configuration to local-only collection.
+
+## Building the candidate
+
+`native/mac/runtime-assets.json` pins official Node and Astral Python archive URLs and SHA-256 checksums. Download those archives into a build cache, then prepare a runtime-only payload:
+
+```sh
+python3 native/mac/prepare-runtime.py --cache /absolute/build-cache --output /absolute/new-runtime.tar.gz
+```
+
+The builder requires a `tar` implementation with Zstandard support to read the matching Python build's license metadata. It verifies the three archive checksums before preparing a new output file. Node's npm and development files are excluded, as are Python bytecode caches. Python's bundled package notices and 14 dependency notices are retained. One documented upstream manifest reference to zlib-ng is omitted because this exact build links macOS system zlib instead. Missing notices from other builds fail preparation.
+
+Extract the prepared payload into a new directory. Build the web assets with the pinned project dependencies, or transfer a verified web bundle from another build machine. On an Apple Silicon Mac with Xcode tools:
+
+```sh
+node native/build.mjs --runtime-dir /absolute/extracted-runtime --web-dir /absolute/web-bundle
+```
+
+The web directory must include its generated `assets/third-party-licenses.txt`. The builder checks runtime file hashes, preserves relative symlinks, signs all 11 bundled Mach-O binaries, and checks the final app. The runtime manifest records the input files before local signing, not hashes of the signed binaries. Signing is ad hoc, not an Apple Developer ID signature or notarization. No paid signing service is used. Downloaded-app Gatekeeper handling and public distribution are still pending.
+
+The candidate passes configuration self-tests, an isolated bundled-collector test with all sources disabled and no developer tools on PATH, signature verification, and the WebKit renderer/data-bridge test. A separate live collection using only the packaged runtimes read ActivityWatch, Codex tokens/settings, Wispr and TypeWhisper successfully. Source-setting controls were visually checked in an isolated preview: Cancel discards changes, Save persists them, and the dashboard receives the new source's data. This is development-machine evidence, not a clean-machine installation test.
+
+For an isolated UI check, launch the built executable with `--preview --show`. This creates temporary settings with every source disabled, does not change installed settings, and prevents launch-at-login changes. Preview source choices affect only that temporary data folder. Quit the preview when finished.
 
 ## Independent local collector
 
@@ -35,4 +59,4 @@ Snapshots include only the existing allowlisted usage fields. Raw prompts, tool 
 
 The local collector was tested in an isolated directory on the development Mac. ActivityWatch, saved Codex usage, Wispr and TypeWhisper all returned valid metadata. The snapshot passed the private-field shape check. Regression tests cover disabled readers, output filtering, shared token/settings reads, invalid counters, and ActivityWatch interval normalization. POSIX runner tests cover failure, timeout, overlapping runs and separation of bundle code from writable state.
 
-These checks did not modify the installed app, its login registration, its existing settings or its legacy cross-device collector. They do not yet establish a self-contained Mac release, clean-machine compatibility, or an installed-app migration. Do not replace the working collector until the app's packaged runtimes, configuration flow and optional device sync have been verified.
+These checks did not modify the installed app, its login registration, its existing settings or its legacy cross-device collector. Public release packaging, clean-machine compatibility, and installed-app migration remain pending. Do not replace the working cross-device collector until optional device sync has been verified.

@@ -9,6 +9,7 @@ final class ObservatoryStore: ObservableObject {
     @Published var lastAttempt = ""
     @Published var now = Date()
     let runtime: URL
+    private(set) var localCollection = false
     private var process: Process?
     private var pollTimer: Timer?
     private var refreshTimer: Timer?
@@ -16,6 +17,8 @@ final class ObservatoryStore: ObservableObject {
 
     init(runtime: URL) {
         self.runtime = runtime
+        do { localCollection = try CollectorConfiguration.prepare(runtime: runtime) }
+        catch { lastAttempt = "configuration-unavailable" }
         reload()
     }
 
@@ -57,18 +60,16 @@ final class ObservatoryStore: ObservableObject {
 
     func refresh() {
         guard process == nil else { return }
-        guard let config = readObject(runtime.appendingPathComponent("native-runtime.json")),
-              let python = config["python"] as? String, let node = config["node"] as? String,
-              python.hasPrefix("/"), node.hasPrefix("/"),
-              FileManager.default.isExecutableFile(atPath: python),
-              FileManager.default.isExecutableFile(atPath: node) else {
+        guard let resources = Bundle.main.resourceURL,
+              let local = try? CollectorConfiguration.prepare(runtime: runtime),
+              let launch = try? CollectorConfiguration.launch(runtime: runtime, resources: resources, local: local) else {
             lastAttempt = "runtime-unavailable"
             return
         }
+        localCollection = local
         let task = Process()
-        task.executableURL = URL(fileURLWithPath: python)
-        task.arguments = [runtime.appendingPathComponent("scripts/run-collector.py").path,
-                          "--node", node, "--interval", "300"]
+        task.executableURL = launch.executable
+        task.arguments = launch.arguments
         task.currentDirectoryURL = runtime
         task.standardOutput = FileHandle.nullDevice
         task.standardError = FileHandle.nullDevice

@@ -41,7 +41,7 @@ The project is an early preview tested on one Mac, Windows and WSL setup. The Ma
 
 | Platform | Current status |
 | --- | --- |
-| macOS, Apple Silicon | Native app implemented. [Local collection](docs/MAC.md) verified. Self-contained packaging pending. |
+| macOS, Apple Silicon | [Self-contained candidate](docs/MAC.md) with verified local sources and source settings. Public release pending. |
 | Windows x64 | Native tray app with local collection and WebView2 dashboard. [Installer tested](docs/WINDOWS.md); public release pending. |
 | Ubuntu / WSL | Configured token and workflow sources. Standalone desktop app planned. |
 

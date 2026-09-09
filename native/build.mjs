@@ -1,15 +1,24 @@
 import {execFileSync,spawnSync} from 'node:child_process';
-import {mkdirSync,mkdtempSync,cpSync,writeFileSync,readdirSync,rmSync,statSync,existsSync} from 'node:fs';
+import {mkdirSync,mkdtempSync,cpSync,writeFileSync,readFileSync,readdirSync,rmSync,statSync,existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
+import {bundleRuntime} from './mac/runtime-bundle.mjs';
+import {sourceState} from './source-state.mjs';
 
 const root=fileURLToPath(new URL('..',import.meta.url));
+const source=sourceState(root);
+const runtimeIndex=process.argv.indexOf('--runtime-dir');
+const runtimeSource=runtimeIndex>=0?process.argv[runtimeIndex+1]:null;
+if(!runtimeSource || !path.isAbsolute(runtimeSource))throw Error('Pass --runtime-dir with an absolute verified Mac runtime payload directory');
 const output=path.join(root,'.native-build');
+const webIndex=process.argv.indexOf('--web-dir');
+const webSource=webIndex>=0?process.argv[webIndex+1]:path.join(output,'web');
+if(!webSource || !path.isAbsolute(webSource))throw Error('Use an absolute web bundle directory');
 mkdirSync(output,{recursive:true});
-if (process.argv.includes('--native-only')) {
+if (process.argv.includes('--native-only') || webIndex>=0) {
   // Explicit opt-in for Swift-only edits. The packaged web smoke test still runs.
-  if (!existsSync(path.join(output,'web/index.html'))) throw Error('Build the web bundle first');
+  if (!existsSync(path.join(webSource,'index.html'))) throw Error('Build the web bundle first');
   console.log('Reusing the existing web bundle for a native-only change.');
 } else {
   execFileSync(path.join(root,'node_modules/.bin/vite'),['build','--config','native/vite.config.mts'],{cwd:root,stdio:'inherit'});
@@ -21,6 +30,9 @@ const contents=path.join(bundle,'Contents');
 const resources=path.join(contents,'Resources');
 mkdirSync(path.join(contents,'MacOS'),{recursive:true});
 mkdirSync(resources,{recursive:true});
+writeFileSync(path.join(resources,'build-info.json'),JSON.stringify({version:'0.3.0',sourceRevision:source.revision,sourceDirty:source.dirty}));
+const runtimeBinaries=bundleRuntime(runtimeSource,path.join(resources,'Runtime'),
+  JSON.parse(readFileSync(path.join(root,'native/mac/runtime-assets.json'),'utf8')));
 const mark=path.join(root,'public/brand/telescope.svg');
 cpSync(mark,path.join(resources,'telescope.svg'));
 const iconset=path.join(staging,'AppIcon.iconset');
@@ -29,8 +41,9 @@ execFileSync('/usr/bin/xcrun',['swift','-module-cache-path',path.join(output,'mo
 execFileSync('/usr/bin/iconutil',['-c','icns',iconset,'-o',path.join(resources,'AppIcon.icns')],{stdio:'inherit'});
 const web=path.join(resources,'Web');
 if(existsSync(web))rmSync(web,{recursive:true});
-cpSync(path.join(output,'web'),web,{recursive:true});
+cpSync(webSource,web,{recursive:true});
 if(existsSync(path.join(web,'local')))throw Error('Private snapshots must never enter the app bundle');
+if(!existsSync(path.join(web,'assets/third-party-licenses.txt')))throw Error('Web dependency notices must be included');
 const scripts=path.join(resources,'Collector','scripts');
 mkdirSync(scripts,{recursive:true});
 for(const name of readdirSync(path.join(root,'scripts'))) {
@@ -51,8 +64,8 @@ writeFileSync(path.join(contents,'Info.plist'),`<?xml version="1.0" encoding="UT
 <key>CFBundleExecutable</key><string>WorkspaceObservatory</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleIconFile</key><string>AppIcon</string>
-<key>CFBundleShortVersionString</key><string>0.2.0</string>
-<key>CFBundleVersion</key><string>5</string>
+<key>CFBundleShortVersionString</key><string>0.3.0</string>
+<key>CFBundleVersion</key><string>6</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>LSUIElement</key><true/>
 <key>NSHighResolutionCapable</key><true/>
@@ -63,7 +76,8 @@ for (const attribute of ['com.apple.FinderInfo','com.apple.ResourceFork']) {
 }
 execFileSync('/usr/bin/codesign',['--force','--sign','-','--timestamp=none',bundle],{stdio:'inherit'});
 execFileSync(binary,['--self-test'],{stdio:'inherit'});
+execFileSync(binary,['--test-collector'],{stdio:'inherit',timeout:30000});
 execFileSync('/usr/bin/codesign',['--verify','--strict',bundle],{stdio:'inherit'});
 execFileSync(binary,['--test-web'],{stdio:'inherit',timeout:35000});
-writeFileSync(path.join(output,'app.json'),JSON.stringify({bundle,builtAt:new Date().toISOString()}));
-console.log(`Built ${bundle} (native binary ${(statSync(binary).size/1048576).toFixed(1)} MiB). No live data bundled.`);
+writeFileSync(path.join(output,'app.json'),JSON.stringify({bundle,builtAt:new Date().toISOString(),sourceRevision:source.revision,sourceDirty:source.dirty}));
+console.log(`Built ${bundle} (native binary ${(statSync(binary).size/1048576).toFixed(1)} MiB, ${runtimeBinaries} signed runtime binaries). No live data bundled.`);

@@ -13,17 +13,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var store: ObservatoryStore!
     private var terminationSignal: DispatchSourceSignal?
     private var panelSize = NSSize.zero
+    private var previewRuntime: URL?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        let runtime = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/Workspace Observatory")
+        let runtime: URL
+        if CommandLine.arguments.contains("--preview") {
+            // An isolated, empty UI preview never changes installed settings or login state.
+            let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("observatory-ui-preview-\(UUID().uuidString)")
+            do {
+                _ = try CollectorConfiguration.prepare(runtime: temporary)
+                try CollectorConfiguration.save(Dictionary(uniqueKeysWithValues: CollectorConfiguration.defaults.keys.map { ($0, false) }), runtime: temporary)
+            } catch { NSApp.terminate(nil); return }
+            previewRuntime = temporary
+            runtime = temporary
+        } else {
+            runtime = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Library/Application Support/Workspace Observatory")
+        }
         store = ObservatoryStore(runtime: runtime)
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem.button {
             let image = telescopeImage(template: true)
             button.image = image
-            button.toolTip = "Workspace Observatory"
+            button.toolTip = previewRuntime == nil ? "Workspace Observatory" : "Workspace Observatory (temporary preview)"
             button.target = self
             button.action = #selector(togglePanel)
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
@@ -46,6 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let items = NSMenu()
         items.addItem(withTitle: "Open Observatory", action: #selector(openDefault), keyEquivalent: "o").target = self
         items.addItem(withTitle: "Refresh sources", action: #selector(refresh), keyEquivalent: "r").target = self
+        items.addItem(withTitle: "Local source settings…", action: #selector(sourceSettings), keyEquivalent: ",").target = self
         items.addItem(.separator())
         items.addItem(withTitle: "Quit Observatory", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         application.submenu = items
@@ -89,9 +103,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let menu = NSMenu()
         menu.addItem(withTitle: "Open Observatory", action: #selector(openDefault), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Refresh sources", action: #selector(refresh), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Local source settings…", action: #selector(sourceSettings), keyEquivalent: "").target = self
         menu.addItem(.separator())
         let login = menu.addItem(withTitle: "Launch at login", action: #selector(toggleLogin), keyEquivalent: "")
         login.target = self
+        login.isEnabled = previewRuntime == nil
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
         menu.addItem(withTitle: "Login settings…", action: #selector(loginSettings), keyEquivalent: "").target = self
         menu.addItem(.separator())
@@ -101,6 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     @objc private func toggleLogin() {
+        guard previewRuntime == nil else { return }
         do {
             if SMAppService.mainApp.status == .enabled { try SMAppService.mainApp.unregister() }
             else { try SMAppService.mainApp.register() }
@@ -112,6 +129,59 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
     @objc private func loginSettings() { SMAppService.openSystemSettingsLoginItems() }
+    @objc private func sourceSettings() {
+        popover.performClose(nil)
+        let alert = NSAlert()
+        alert.messageText = "Local source settings"
+        let local: Bool
+        do { local = try CollectorConfiguration.prepare(runtime: store.runtime) }
+        catch {
+            alert.informativeText = "The local configuration could not be read. Existing settings have been preserved."
+            alert.runModal()
+            return
+        }
+        guard local else {
+            alert.informativeText = "This preview uses your existing cross-device configuration. It has been preserved. Local-only settings are available for new installations."
+            alert.runModal()
+            return
+        }
+        guard !store.refreshing else {
+            alert.informativeText = "A collection is running. Try again when it finishes so source changes apply to the next complete snapshot."
+            alert.runModal()
+            return
+        }
+        do {
+            let config = try CollectorConfiguration.read(runtime: store.runtime)
+            let sources = [("activity", "ActivityWatch screen time (must be running)"),
+                           ("codex", "Saved Codex usage and settings"),
+                           ("wispr", "Wispr Flow statistics"),
+                           ("typewhisper", "TypeWhisper statistics")]
+            let buttons = sources.map { key, title in
+                let button = NSButton(checkboxWithTitle: title, target: nil, action: nil)
+                button.state = config[key] == true ? .on : .off
+                return button
+            }
+            let stack = NSStackView(views: buttons)
+            stack.orientation = .vertical
+            stack.alignment = .leading
+            stack.spacing = 10
+            stack.frame = NSRect(x: 0, y: 0, width: 360, height: 115)
+            alert.accessoryView = stack
+            alert.informativeText = "Read usage metadata from this Mac only. Prompts, window titles, transcripts and audio stay out of Observatory snapshots. Dictation sources are optional."
+            alert.addButton(withTitle: "Save")
+            alert.addButton(withTitle: "Cancel")
+            if alert.runModal() == .alertFirstButtonReturn {
+                let updated = Dictionary(uniqueKeysWithValues: zip(sources, buttons).map { ($0.0.0, $0.1.state == .on) })
+                try CollectorConfiguration.save(updated, runtime: store.runtime)
+                store.refresh()
+            }
+        } catch {
+            let failure = NSAlert()
+            failure.messageText = "Source settings unavailable"
+            failure.informativeText = "The local settings file could not be read or saved. Existing settings were not intentionally replaced."
+            failure.runModal()
+        }
+    }
     @objc private func refresh() { store.refresh() }
     @objc private func openDefault() { openDashboard("activity") }
 
@@ -155,11 +225,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         openDashboard("activity")
         return true
     }
-    func applicationWillTerminate(_ notification: Notification) { store?.stop() }
+    func applicationWillTerminate(_ notification: Notification) {
+        store?.stop()
+        // Keep a preview directory if collection is still shutting down. It contains
+        // only this preview's settings/snapshots, never installed application state.
+        if let temporary = previewRuntime, store?.refreshing == false {
+            try? FileManager.default.removeItem(at: temporary)
+        }
+    }
 }
 
 if CommandLine.arguments.contains("--self-test") {
     runSelfTests()
+} else if CommandLine.arguments.contains("--test-collector") {
+    runCollectorSelfTest()
 } else if CommandLine.arguments.contains("--test-web") {
     MainActor.assumeIsolated {
         let application = NSApplication.shared
@@ -169,6 +248,10 @@ if CommandLine.arguments.contains("--self-test") {
         withExtendedLifetime(test) { application.run() }
     }
 } else if CommandLine.arguments.contains("--enable-login") {
+    if CommandLine.arguments.contains("--preview") {
+        print("Login registration is disabled for previews")
+        exit(1)
+    }
     do {
         try SMAppService.mainApp.register()
         print(SMAppService.mainApp.status == .enabled ? "enabled" : "approval-required")
