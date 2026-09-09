@@ -1,0 +1,69 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,symlinkSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
+import {inspectMacPackage,verifyMacPackage} from '../native/mac/inspect-package.mjs';
+
+function fixture(run) {
+  const folder=mkdtempSync(path.join(tmpdir(),'observatory-mac-package-'));
+  const bundle=path.join(folder,'Workspace Observatory.app'),revision='a'.repeat(40);
+  const files=['Contents/MacOS/WorkspaceObservatory','Contents/Info.plist',
+    'Contents/Resources/LICENSE','Contents/Resources/THIRD-PARTY-NOTICES.md',
+    'Contents/Resources/Web/index.html','Contents/Resources/Web/assets/third-party-licenses.txt',
+    'Contents/Resources/Runtime/node/bin/node','Contents/Resources/Runtime/node/LICENSE',
+    'Contents/Resources/Runtime/python/bin/python3.13','Contents/Resources/Runtime/python/licenses/LICENSE.cpython.txt',
+    'Contents/Resources/Collector/scripts/run-collector.py','Contents/Resources/Collector/scripts/collect-mac.mjs',
+    'Contents/_CodeSignature/CodeResources'];
+  for(const name of files) {
+    mkdirSync(path.dirname(path.join(bundle,name)),{recursive:true});
+    writeFileSync(path.join(bundle,name),'fixture');
+  }
+  const info=path.join(bundle,'Contents/Resources/build-info.json');
+  writeFileSync(info,JSON.stringify({sourceRevision:revision,sourceDirty:false,version:'0.3.0'}));
+  try{run({bundle,revision,info});}finally{rmSync(folder,{recursive:true,force:true});}
+}
+
+test('Mac package manifest covers exact content and detects changed or added files',()=>{
+  fixture(({bundle,revision})=>{
+    const manifest=inspectMacPackage(bundle,{revision});
+    assert.equal(manifest.fileCount,14);
+    assert.deepEqual(verifyMacPackage(bundle,manifest),manifest);
+    const file=path.join(bundle,'Contents/Resources/LICENSE'),original=readFileSync(file);
+    writeFileSync(file,'changed');assert.throws(()=>verifyMacPackage(bundle,manifest),/does not match/);
+    writeFileSync(file,original);
+    writeFileSync(path.join(bundle,'extra.txt'),'extra');
+    assert.throws(()=>verifyMacPackage(bundle,manifest),/does not match/);
+  });
+});
+
+test('Mac packages require clean matching source and distribution notices',()=>{
+  fixture(({bundle,revision,info})=>{
+    assert.throws(()=>inspectMacPackage(bundle,{revision:'b'.repeat(40)}),/matching clean-source/);
+    writeFileSync(info,JSON.stringify({sourceRevision:revision,sourceDirty:true,version:'0.3.0'}));
+    assert.throws(()=>inspectMacPackage(bundle),/clean-source/);
+    writeFileSync(info,JSON.stringify({sourceRevision:revision,sourceDirty:false,version:'0.3.0'}));
+    rmSync(path.join(bundle,'Contents/Resources/LICENSE'));
+    assert.throws(()=>inspectMacPackage(bundle),/Required package file missing/);
+  });
+});
+
+test('Mac package inspection rejects private filenames and encoded build paths',()=>{
+  fixture(({bundle})=>{
+    const privateFile=path.join(bundle,'usage.json');writeFileSync(privateFile,'{}');
+    assert.throws(()=>inspectMacPackage(bundle),/Private/);rmSync(privateFile);
+    writeFileSync(path.join(bundle,'Contents/Resources/LICENSE'),Buffer.from('/fixture/private/build','utf16le'));
+    assert.throws(()=>inspectMacPackage(bundle,{buildRoots:['/fixture/private/build']}),/Build path/);
+  });
+});
+
+test('Mac package links must remain inside the app and match the manifest', {skip:process.platform==='win32'},()=>{
+  fixture(({bundle})=>{
+    const link=path.join(bundle,'Contents/Resources/Runtime/python/bin/python3');
+    symlinkSync('python3.13',link);
+    const manifest=inspectMacPackage(bundle);
+    assert.equal(manifest.symlinks.length,1);
+    rmSync(link);assert.throws(()=>verifyMacPackage(bundle,manifest),/does not match/);
+    symlinkSync(process.execPath,link);assert.throws(()=>inspectMacPackage(bundle),/escapes/);
+  });
+});

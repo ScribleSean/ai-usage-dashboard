@@ -30,6 +30,7 @@ const contents=path.join(bundle,'Contents');
 const resources=path.join(contents,'Resources');
 mkdirSync(path.join(contents,'MacOS'),{recursive:true});
 mkdirSync(resources,{recursive:true});
+for(const name of ['LICENSE','THIRD-PARTY-NOTICES.md'])cpSync(path.join(root,name),path.join(resources,name));
 writeFileSync(path.join(resources,'build-info.json'),JSON.stringify({version:'0.3.0',sourceRevision:source.revision,sourceDirty:source.dirty}));
 const runtimeBinaries=bundleRuntime(runtimeSource,path.join(resources,'Runtime'),
   JSON.parse(readFileSync(path.join(root,'native/mac/runtime-assets.json'),'utf8')));
