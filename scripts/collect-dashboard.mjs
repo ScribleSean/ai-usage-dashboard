@@ -129,7 +129,7 @@ async function api(suffix, body) {
   if (!r.ok) throw Error('ActivityWatch unavailable');
   return r.json();
 }
-async function macActivity() {
+export async function macActivity({raw=false}={}) {
   const buckets = Object.values(await api('/buckets/'));
   const hostnames = [hostname()];
   // Watchers can use the Bonjour name while the server uses the Unix hostname.
@@ -160,12 +160,13 @@ async function macActivity() {
   const latest = await api(`/buckets/${encodeURIComponent(w)}/events?limit=1`);
   return {intervals,trackingIntervals,latestEvent:latest[0]?.timestamp};
   }));
-  return cleanActivity({
+  const report={
     intervals:reports.flatMap(r=>r.intervals),
     trackingIntervals:reports.flatMap(r=>r.trackingIntervals),
     start:start.toISOString(), end:end.toISOString(),
     latestEvent:reports.map(r=>r.latestEvent).filter(v=>Number.isFinite(Date.parse(v))).sort((a,b)=>Date.parse(a)-Date.parse(b)).at(-1),
-  },'Mac');
+  };
+  return raw?report:cleanActivity(report,'Mac');
 }
 async function guarded(host, fn) {
   try {

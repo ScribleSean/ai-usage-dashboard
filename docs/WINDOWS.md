@@ -16,7 +16,7 @@ Pass `-Dotnet C:\path\to\dotnet.exe` for a private SDK installation. The script 
 
 The icon is committed as a small generated asset. Its source is the canonical [telescope mark](../public/brand/telescope.svg). Regenerating that asset currently uses the Mac icon tool, but ordinary Windows builds do not require a Mac.
 
-The build runs native snapshot and startup-contract tests plus the JavaScript and reader test suite. Five POSIX runner tests explicitly skip on Windows because the Windows app uses its native collector, not the `flock` and process-group runner. This does not prove the UI works on a signed-in desktop. Run the executable from `native\windows\bin\Release\net10.0-windows` to inspect the tray and dashboard.
+The build runs native snapshot and startup-contract tests plus the JavaScript and reader test suite. Six POSIX runner tests explicitly skip on Windows because the Windows app uses its native collector, not the `flock` and process-group runner. This does not prove the UI works on a signed-in desktop. Run the executable from `native\windows\bin\Release\net10.0-windows` to inspect the tray and dashboard.
 
 ## Prepare a package candidate
 

@@ -57,3 +57,13 @@ test('overlapping collection is skipped without replacing running status',async 
   assert.equal((await status(root)).state,'running');assert.equal(run(root),'busy');assert.equal((await status(root)).state,'running');
   assert.equal(await finished,0);assert.equal((await status(root)).state,'ok');
 });
+
+test('packaged runner keeps writable state separate from the bundled script',async t=>{
+  const bundle=await fixture(t,'');
+  const runtime=await fixture(t,'');
+  const entry=path.join(bundle,'scripts','collect-mac.mjs');
+  await writeFile(entry,`import fs from 'node:fs';if(process.env.OBSERVATORY_RUNTIME!==process.cwd() || !process.env.OBSERVATORY_PYTHON.startsWith('/'))throw Error('Invalid packaged environment');fs.writeFileSync('public/local/usage.json',JSON.stringify({collectedAt:new Date().toISOString(),activity:[{status:'ok'}]}));`);
+  const output=JSON.parse(execFileSync('python3',[reader,'--node',process.execPath,'--runtime',runtime,'--collector',entry,'--interval','300'],{encoding:'utf8'}));
+  assert.equal(output.collection,'ok');assert.equal((await status(runtime)).state,'ok');
+  await assert.rejects(status(bundle));
+});

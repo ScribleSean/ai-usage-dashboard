@@ -8,6 +8,7 @@ import pathlib
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 
 
@@ -43,7 +44,7 @@ def stop_child(child):
         pass
 
 
-def run_collection(root, node, interval=0, timeout=240):
+def run_collection(root, node, interval=0, timeout=240, *, collector=None, python=None):
     root = pathlib.Path(root).resolve(strict=True)
     runtime = root / '.runtime'
     runtime.mkdir(mode=0o700, exist_ok=True)
@@ -67,7 +68,15 @@ def run_collection(root, node, interval=0, timeout=240):
             env['PATH'] = os.pathsep.join(dict.fromkeys([
                 str(pathlib.Path(node).parent), '/opt/homebrew/bin', '/usr/local/bin',
                 '/usr/bin', '/bin', env.get('PATH', '')]))
-            child = subprocess.Popen([node, str(root / 'scripts' / 'collect-dashboard.mjs')],
+            if collector is not None:
+                collector = pathlib.Path(collector)
+                if not collector.is_absolute() or collector.name not in ('collect-mac.mjs', 'collect-dashboard.mjs'):
+                    raise ValueError('Unsupported collector entrypoint')
+                env['OBSERVATORY_RUNTIME'] = str(root)
+                env['OBSERVATORY_PYTHON'] = python or sys.executable
+                if not os.path.isabs(env['OBSERVATORY_PYTHON']):
+                    raise ValueError('Absolute Python executable required')
+            child = subprocess.Popen([node, str(collector or root / 'scripts' / 'collect-dashboard.mjs')],
                                      cwd=root, env=env, stdout=subprocess.DEVNULL,
                                      stderr=subprocess.DEVNULL, start_new_session=True)
             if child.wait(timeout=timeout) != 0:
@@ -100,12 +109,18 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--node', default=shutil.which('node'))
     parser.add_argument('--interval', type=int, default=0)
+    parser.add_argument('--runtime', type=pathlib.Path)
+    parser.add_argument('--collector', type=pathlib.Path)
+    parser.add_argument('--python', default=sys.executable)
     args = parser.parse_args()
     if not args.node or not os.path.isabs(args.node) or args.interval not in (0, 300):
         parser.error('Use an absolute Node path and a zero or 300-second cadence')
+    if args.runtime is not None and not args.runtime.is_absolute():
+        parser.error('Use an absolute runtime directory')
     def interrupted(signum, frame):
         raise InterruptedError('Collection stopped')
     signal.signal(signal.SIGTERM, interrupted)
-    result = run_collection(pathlib.Path(__file__).resolve().parent.parent, args.node, args.interval)
+    result = run_collection(args.runtime or pathlib.Path(__file__).resolve().parent.parent, args.node, args.interval,
+                            collector=args.collector, python=args.python)
     print(json.dumps(dict(collection=result)))
     raise SystemExit(1 if result == 'failed' else 0)
