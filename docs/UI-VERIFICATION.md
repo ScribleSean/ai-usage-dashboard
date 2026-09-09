@@ -24,9 +24,19 @@ The visual rail highlight remained on Activity after switching views in the earl
 
 The same check exposed Windows-specific disconnected-source text in the Mac token view. The message is now source-neutral and was verified in the native Mac preview. Both UI builds and the Mac signature, self-test, bundled-collector, WebKit and window-lifecycle checks passed for this candidate. These fixes do not change collection settings or install a new version over the working app.
 
+## Mac enlargement follow-up, candidate `4209a65`
+
+The Mac dashboard now provides 75% to 200% page zoom through its View menu and window-local keyboard handling. Native self-tests cover each zoom step, both limits, invalid numeric state, recognized shortcut keys and an unrelated key. Development preview checks verified the 200% menu action, repeated Command-equals to reach 200%, Command-zero reset, Command-minus to reach 75%, and disabled menu actions at both bounds. Closing and reopening the dashboard restored its default size.
+
+All five empty-data views were inspected at 200% in the 800-by-550-point window during this follow-up. Navigation changes to a horizontal bottom bar; Right and Enter activated Tokens. Long content remained vertically scrollable, including expanded token-counting details. These are page-zoom checks, not a font-only setting or a complete keyboard/screen-reader audit.
+
+The light-theme spot check exposed stale header-button backgrounds during color transitions. Those controls now update immediately. The final candidate was checked again at 200% in light mode, with readable reload and theme icons. The counting explanation and collection guidance were also updated to describe saved Codex records and desktop collection rather than requiring developer-only commands.
+
+The final candidate passed Mac signature, self-test, bundled-collector, WebKit and lifecycle checks. The shared UI passed TypeScript and both builds on Windows. No new dependencies or installed-app changes were required.
+
 ## Still open
 
-- Check populated synthetic records, expanded details, complete keyboard focus order, both themes and 200% text enlargement.
+- Check populated synthetic records and complete keyboard focus order, including both themes and enlarged layouts. The empty-state and selected expanded-detail checks above do not cover those cases.
 - Repeat the interaction and layout checks in Windows WebView2. A Windows web build does not prove Windows-native interaction behavior.
 - Verify the final packaged release, not only this development candidate. Existing ZIP and installer artifacts retain their earlier revisions and do not contain these UI fixes.
 

@@ -4,6 +4,12 @@ The Apple Silicon app uses a SwiftUI menu-bar panel and a system WebKit dashboar
 
 New installations create private local source settings. ActivityWatch and saved Codex usage are enabled by default. Wispr and TypeWhisper are off until selected in **Local source settings**. Changes apply to the next collection. The app does not automatically convert an existing cross-device configuration to local-only collection.
 
+## Dashboard enlargement
+
+With the dashboard open, use **View > Zoom In**, **Zoom Out**, **Actual Size**, or **200%**. The keyboard shortcuts are Command-equals (or Command-plus), Command-minus, and Command-zero. Zoom is bounded from 75% to 200%; the menu disables further changes at either limit. Keyboard handling belongs to the dashboard view, not a global keyboard hook.
+
+This scales the web page's text and controls, not macOS system fonts or the menu-bar panel. Zoom applies to the open dashboard and resets to 100% after it is closed and reopened. It does not change collection settings. See [native UI verification](UI-VERIFICATION.md) for the tested layouts and remaining limits.
+
 ## Building the candidate
 
 `native/mac/runtime-assets.json` pins official Node and Astral Python archive URLs and SHA-256 checksums. Download those archives into a build cache, then prepare a runtime-only payload:
