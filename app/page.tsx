@@ -8,6 +8,7 @@ import ToolDetail from './tool-detail';
 import Dictation, {type DictationSource} from './dictation';
 import { selectTokenDays, aggregateProfiles } from '../scripts/token-periods.mjs';
 import telescopeMark from '../public/brand/telescope.svg';
+import {imageSource} from '../scripts/image-source.mjs';
 import {
   Activity,
   Layers3,
@@ -276,7 +277,7 @@ export default function Home() {
       <header className="app-bar">
         <div className="wordmark">
           <span className="brand-mark" aria-hidden="true">
-            <img src={telescopeMark} width="28" height="28" alt=""/>
+            <img src={imageSource(telescopeMark)} width="28" height="28" alt=""/>
           </span>
           <span>
             <span className="wordmark-detail">Workspace </span>Observatory

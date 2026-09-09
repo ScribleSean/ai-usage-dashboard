@@ -10,6 +10,7 @@ for(const name of ['index.html','index.rsc','404.html','favicon.svg','local']) {
 }
 await cp(path.join(source,'workspace-observatory/_next'),path.join(target,'_next'),{recursive:true,errorOnExist:true,force:false});
 const html=await readFile(path.join(target,'index.html'),'utf8');
+assert.ok(!html.includes('src="[object Object]"'),'Image imports must resolve to URL strings');
 for(const match of html.matchAll(/(?:src|href)="(\/workspace-observatory\/[^"?#]+)"/g)) {
   assert.ok((await stat(path.join(target,match[1].slice('/workspace-observatory/'.length)))).isFile());
 }
