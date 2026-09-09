@@ -61,6 +61,7 @@
 }
 .dictation-controls { display:flex; justify-content:space-between; flex-wrap:wrap; gap:1rem; margin:1.5rem 0; }
 .dictation-controls > div { display:flex; flex-wrap:wrap; gap:.5rem; }
+.dictation-controls button { transition:none !important; }
 .dictation-period, .dictation-note { color:var(--m3-secondary); font-size:.875rem; line-height:1.6; }
 .dictation-metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,12rem),1fr)); gap:1rem; margin:1rem 0; }
 .dictation-metrics > div { padding:1.5rem; background:var(--m3-low); border-radius:1.5rem; display:grid; gap:.75rem; }
