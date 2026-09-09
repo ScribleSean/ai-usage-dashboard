@@ -14,11 +14,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var terminationSignal: DispatchSourceSignal?
     private var panelSize = NSSize.zero
     private var previewRuntime: URL?
+    private weak var lifecycleWebView: WKWebView?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         let runtime: URL
-        if CommandLine.arguments.contains("--preview") {
+        let lifecycleTest = CommandLine.arguments.contains("--test-lifecycle")
+        if CommandLine.arguments.contains("--preview") || lifecycleTest {
             // An isolated, empty UI preview never changes installed settings or login state.
             let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("observatory-ui-preview-\(UUID().uuidString)")
             do {
@@ -49,6 +51,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         termination.setEventHandler { NSApp.terminate(nil) }
         termination.resume()
         terminationSignal = termination
+        // Lifecycle tests use empty private settings and never start collection.
+        if lifecycleTest { checkDashboardLifecycle(remaining: 3); return }
         store.start()
         if CommandLine.arguments.contains("--show") { togglePanel() }
     }
@@ -219,6 +223,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         detail?.contentView = nil
         webView = nil
         detail = nil
+    }
+
+    private func checkDashboardLifecycle(remaining: Int) {
+        guard remaining > 0 else {
+            print("Native lifecycle passed: three dashboard open/close cycles released their web views; menu-bar app remained running")
+            NSApp.terminate(nil)
+            return
+        }
+        openDashboard("activity")
+        lifecycleWebView = webView
+        guard lifecycleWebView != nil, detail?.isVisible == true else {
+            print("Native lifecycle failed: dashboard did not open")
+            exit(1)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [self] in
+            detail?.performClose(nil)
+            // Allow AppKit's close notification and autorelease pool to drain.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [self] in
+                guard detail == nil, webView == nil, lifecycleWebView == nil,
+                      statusItem.button != nil, NSApp.isRunning else {
+                    print("Native lifecycle failed: closed dashboard retained state or menu-bar app stopped")
+                    exit(1)
+                }
+                checkDashboardLifecycle(remaining: remaining - 1)
+            }
+        }
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

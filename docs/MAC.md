@@ -26,6 +26,8 @@ The candidate passes configuration self-tests, an isolated bundled-collector tes
 
 For an isolated UI check, launch the built executable with `--preview --show`. This creates temporary settings with every source disabled, does not change installed settings, and prevents launch-at-login changes. Preview source choices affect only that temporary data folder. Quit the preview when finished.
 
+The build also runs `--test-lifecycle`: three dashboard open/close cycles with temporary empty settings and no collection. It checks that each `WKWebView` is deallocated after closing and the menu-bar app remains running. This tests object lifetime, not total WebKit helper memory, idle CPU, login startup or actual sleep/wake behavior.
+
 ## Distribution packaging
 
 From a clean checkout matching the app's embedded source revision:

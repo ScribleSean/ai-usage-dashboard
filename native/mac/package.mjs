@@ -19,7 +19,7 @@ const manifest=inspectMacPackage(bundle,{revision:source.revision,buildRoots});
 const binary=app=>path.join(app,'Contents/MacOS/WorkspaceObservatory');
 const check=app=>{
   execFileSync('/usr/bin/codesign',['--verify','--deep','--strict',app],{stdio:'inherit',timeout:30000});
-  for(const flag of ['--self-test','--test-collector','--test-web'])
+  for(const flag of ['--self-test','--test-collector','--test-web','--test-lifecycle'])
     execFileSync(binary(app),[flag],{stdio:'inherit',timeout:40000});
 };
 check(bundle);
@@ -72,7 +72,7 @@ const artifacts=[zipArtifact,describeArtifact(dmg)];
 writeFileSync(path.join(output,'SHA256SUMS.txt'),artifacts.map(asset=>`${asset.sha256}  ${asset.filename}\n`).join(''),{flag:'wx'});
 writeFileSync(path.join(output,'release-info.json'),JSON.stringify({platform:manifest.platform,version:manifest.version,
   sourceRevision:manifest.sourceRevision,signing:manifest.signing,unpackedBytes:manifest.bytes,
-  checks:['source-clean','privacy-scan','full-file-manifest','nested-signatures','zip-roundtrip','relocated-collector','relocated-webkit','dmg-integrity','mounted-dmg-manifest'],artifacts},null,2)+'\n',{flag:'wx'});
+  checks:['source-clean','privacy-scan','full-file-manifest','nested-signatures','zip-roundtrip','relocated-collector','relocated-webkit','relocated-window-lifecycle','dmg-integrity','mounted-dmg-manifest'],artifacts},null,2)+'\n',{flag:'wx'});
 // All mounts have detached successfully. Only this invocation's generated copies
 // are removed; the distribution directory and input app remain untouched.
 rmSync(stage,{recursive:true});
