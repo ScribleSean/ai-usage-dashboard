@@ -2,7 +2,7 @@
 
 The native Windows tray app collects on Windows without a running Mac or open terminal. The current preview uses .NET Windows Forms and the installed Microsoft Edge WebView2 Runtime. Dashboard files are served inside WebView2, with no HTTP server or network listener.
 
-This is a source-build preview, not a finished installer. Windows x64 is the tested build target. Other Windows architectures are not verified.
+This is a development preview. A per-user installer is implemented and tested, but no public binary release is available yet. Windows x64 is the tested build target. Other Windows architectures are not verified.
 
 ## Build on Windows
 
@@ -16,7 +16,7 @@ Pass `-Dotnet C:\path\to\dotnet.exe` for a private SDK installation. The script 
 
 The icon is committed as a small generated asset. Its source is the canonical [telescope mark](../public/brand/telescope.svg). Regenerating that asset currently uses the Mac icon tool, but ordinary Windows builds do not require a Mac.
 
-The build runs native snapshot and startup-contract tests plus the JavaScript and reader test suite. Five POSIX runner tests explicitly skip on Windows because the Windows app uses its native collector, not the `flock` and process-group runner. The suite passed 99 tests on the development Windows host; all 104 remain applicable to POSIX CI. This does not prove the UI works on a signed-in desktop. Run the executable from `native\windows\bin\Release\net10.0-windows` to inspect the tray and dashboard.
+The build runs native snapshot and startup-contract tests plus the JavaScript and reader test suite. Five POSIX runner tests explicitly skip on Windows because the Windows app uses its native collector, not the `flock` and process-group runner. This does not prove the UI works on a signed-in desktop. Run the executable from `native\windows\bin\Release\net10.0-windows` to inspect the tray and dashboard.
 
 ## Prepare a package candidate
 
@@ -36,11 +36,37 @@ node .\native\windows\verify-manifest.mjs 'C:\absolute\path\Workspace Observator
 
 This rejects modified, additional or missing payload files, invalid Windows paths, linked entries and dirty-source manifests. For development candidates only, add `--allow-dirty`; file verification still applies. The manifest is an integrity inventory, not a publisher signature or a substitute for the package privacy inspection.
 
-Installer-tool preparation uses the pinned NSIS archive in `native/windows/installer-tool.json`. Its SHA-256 was computed after matching the official release listing's SHA-1 over an HTTPS download. It is not a vendor-published SHA-256. The compiler stays in the Windows build cache and is not installed system-wide. Installer generation and install/uninstall verification remain pending.
+Installer-tool preparation uses the pinned NSIS archive in `native/windows/installer-tool.json`. Its SHA-256 was computed after matching the official release listing's SHA-1 over an HTTPS download. It is not a vendor-published SHA-256. The compiler stays in the Windows build cache and is not installed system-wide.
 
 `-SkipWebBuild` is an explicit development shortcut for packaging-only changes after a successful dashboard build. Do not use it for final release verification. Windows downloads, dependency caches and output stay on the Windows machine.
 
-The tested candidate is about 224 MiB unpacked, including its private runtimes. This is a disk-size measurement, not a memory or CPU claim. Candidates are unsigned and may trigger Windows security warnings. A public installer is not yet available.
+The tested candidate is about 224 MiB unpacked, including its private runtimes. This is a disk-size measurement, not a memory or CPU claim. Candidates are unsigned and may trigger Windows security warnings.
+
+## Build and test the installer
+
+From a clean checkout matching the package manifest's source revision:
+
+```powershell
+.\native\windows\installer.ps1 -PackageDirectory 'C:\absolute\path\Workspace Observatory'
+```
+
+This verifies the existing package and builds a per-user NSIS installer with a SHA-256 sidecar. The printed executable lives in a separate `artifacts` directory with its build metadata and NSIS license. Only that artifact directory is intended for distribution. The parent compiler-work directory contains generated build paths and must not be published. Warnings are compilation failures. The installer and package source revisions must match and both must be clean.
+
+For isolated development verification, add `-TestIdentity`, then pass the printed executable path to:
+
+```powershell
+.\native\windows\test-installer.ps1 -InstallerPath 'C:\absolute\path\TEST-setup.exe'
+```
+
+The integration test accepts only the test identity and refuses pre-existing test registrations or folders. On the development Windows machine it verified installation, every payload hash, the Start menu shortcut, native self-tests, refusal to overwrite an existing install, running-app refusal, rejection of linked payload directories, uninstall, and reinstall. It also verified preservation of saved data, unrelated files and registration values, and another startup owner. Its temporary installation was removed afterward. These are one-machine checks, not proof of clean-machine compatibility.
+
+## Install, remove, update or roll back
+
+The installer uses `%LOCALAPPDATA%\Programs\Workspace Observatory` and adds a Start menu shortcut plus the current user's uninstall registration. It requires no administrator privileges. Source collection and login startup stay opt-in. It does not install ActivityWatch, WSL or WebView2, and it does not change system runtimes.
+
+Quit the app through its tray menu before removing it in Windows Settings. Uninstall deletes only the package's recorded files and this installation's registrations. Saved settings and snapshots under `%LOCALAPPDATA%\Workspace Observatory` remain. Unrelated files keep their folders from being removed; linked install directories are refused.
+
+There is no automatic updater. To update, uninstall the current version and install the new one. To return to an earlier compatible build, uninstall and reinstall that earlier build. Re-enable login startup afterward if wanted. Keep a private backup of saved data before changing versions. The current test covers reinstalling the same schema, not compatibility with future data migrations. If unrelated files keep an old install folder in place, move that folder aside before reinstalling rather than deleting its contents.
 
 ## Configure sources
 
@@ -62,4 +88,4 @@ On the development Windows machine, the native build and snapshot tests pass. Th
 
 For a synthetic desktop test, prepare a new private test directory with `node native/windows/prepare-demo-runtime.mjs ABSOLUTE_NEW_DIRECTORY`. Run the packaged executable with `--test-web ABSOLUTE_NEW_DIRECTORY` from the signed-in desktop. The test captures only the WebView and only for a snapshot marked as synthetic. It does not capture other windows or the desktop. The result and WebView cache belong in that test directory, never in a release package.
 
-Remaining work includes an installer and uninstall flow, versioned release checksums, clean-environment checks, login and sleep/wake testing, CPU and memory measurements, independent Mac collection and private device sync. Do not publish local snapshots or build caches as release artifacts.
+Remaining work includes final clean-source release artifact checks, clean-environment checks, login and sleep/wake testing, CPU and memory measurements, independent Mac collection and private device sync. Do not publish local snapshots or build caches as release artifacts.

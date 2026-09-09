@@ -1,9 +1,9 @@
 import {readFileSync,writeFileSync,readdirSync,lstatSync,existsSync} from 'node:fs';
 import {createHash} from 'node:crypto';
-import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {forbiddenPackageName,containsBuildPath} from './package-content.mjs';
+import {sourceState} from '../source-state.mjs';
 
 const root=process.argv[2];
 if(!root || !path.isAbsolute(root))throw Error('Absolute package directory required');
@@ -34,8 +34,7 @@ function inspect(folder) {
   }
 }
 inspect(root);
-const revision=execFileSync('git',['rev-parse','HEAD'],{cwd:project,encoding:'utf8'}).trim();
-const dirty=Boolean(execFileSync('git',['status','--porcelain','--untracked-files=normal'],{cwd:project,encoding:'utf8'}).trim());
+const {revision,dirty}=sourceState(project);
 const totalBytes=files.reduce((sum,file)=>sum+file.bytes,0);
 writeFileSync(path.join(root,'package-manifest.json'),JSON.stringify({schema:1,platform:'win-x64',sourceRevision:revision,sourceDirty:dirty,totalBytes,files},null,2)+'\n');
 console.log(JSON.stringify({packageContent:'passed',files:files.length,totalBytes,sourceRevision:revision,sourceDirty:dirty}));
