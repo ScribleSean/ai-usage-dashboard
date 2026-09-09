@@ -1,5 +1,6 @@
 import {mergePeerPayloads} from './peer-payload.mjs';
 import {sshPeerExchange} from './peer-transport.mjs';
+import {assertPairingActive} from './peer-revocation.mjs';
 
 // A sync failure must not replace a valid standalone dashboard with an error.
 export async function finalizePeerCollection(runtime,result,pairing,previous=[],now=Date.now()) {
@@ -10,12 +11,14 @@ export async function finalizePeerCollection(runtime,result,pairing,previous=[],
     let transport='not-configured';
     if(pairing.transport && process.platform==='darwin') {
       try {
+        await assertPairingActive(runtime);
         const incoming=await sshPeerExchange(pairing.transport,local);
         await acceptPeerState(runtime,incoming,pairing.peer,Date.now());
         transport='ok';
       } catch {transport='unavailable';}
     }
     const peer=await readPeerState(runtime,pairing.peer,now);
+    await assertPairingActive(runtime);
     if(peer)result.data=mergePeerPayloads(local.payload,peer.payload,pairing.local,pairing.peer,previous,now);
     result.peer={status:peer?'merged':'waiting',sequence:local.revision.sequence,transport};
   } catch {result.peer={status:'unavailable'};}

@@ -5,6 +5,7 @@ import path from 'node:path';
 import {privateSyncDirectory} from './peer-directory.mjs';
 import {preparePeerCollection} from './peer-collection.mjs';
 import {validatePeerTransport} from './peer-transport.mjs';
+import {assertPeerNotRevoked} from './peer-revocation.mjs';
 
 const exact=(value,keys)=>value && typeof value==='object' && !Array.isArray(value) &&
   Object.keys(value).length===keys.length && Object.keys(value).every(key=>keys.includes(key));
@@ -52,6 +53,7 @@ export async function initializePairing(runtime,value) {
 export async function readPairing(runtime) {
   let directory;
   try {directory=await privateSyncDirectory(runtime);}catch(error){if(error.code==='ENOENT')return null;throw error;}
+  await assertPeerNotRevoked(directory);
   const name=path.join(directory,'pairing.json');
   let before;
   try {before=await lstat(name);}catch(error){if(error.code==='ENOENT')return null;throw error;}

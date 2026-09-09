@@ -2,6 +2,8 @@
 
 Implementation in progress. The September 9 decision is that both native apps show combined Mac and Windows data. Native collection can consume explicitly initialized private pairing state. No pairing has been installed into the live apps and no network peer exchange is enabled yet.
 
+See [pairing maintenance](PAIRING-MAINTENANCE.md) for local revocation and the remaining repair limitations.
+
 ## Data boundaries
 
 Each device continues collecting independently. Its own data remains available when the other device is disconnected. A received snapshot is a replacement for that device's previous snapshot, never an increment to add again.
@@ -21,6 +23,7 @@ The two devices need one shared, randomly generated comparison salt for a pairin
 - `scripts/windows-dashboard.mjs` provides the corresponding Windows projection, including optional Ubuntu records.
 - Both native collectors load saved pairing when present. `scripts/peer-collection.mjs` validates exact fields, host ownership, configured Codex sources and a 256-bit hex comparison salt. Collectors prepend that salt to the Python reader through stdin, never command-line arguments. Invalid pairing withholds export without disabling local collection. With no saved pairing, collection remains unpaired.
 - `scripts/peer-pairing.mjs` generates complementary Mac and Windows configuration in memory, using random 256-bit identifiers and a shared salt. Initialization writes `private-sync/pairing.json` exclusively inside the verified private directory. Existing state cannot be overwritten implicitly. Reads are bounded and reject links, unsafe permissions, unexpected fields and inconsistent identities. No setup UI or authenticated configuration delivery is implemented yet.
+- `scripts/peer-revocation.mjs` explicitly disables a local pairing with a persistent private marker. Pairing reads, private-store operations, outgoing collection and the exchange endpoint check the marker. Revocation retains pairing configuration, snapshots and sequence watermarks, refuses implicit reconnection, and also works when pairing configuration is malformed. It does not cancel bytes already sent or revoke the other device or its SSH access.
 - `scripts/peer-finalize.mjs` connects normal native collection to the private store. It publishes the local revision, reads an already validated peer revision and creates the sanitized merged dashboard. Missing peers preserve standalone data. Storage or pairing failures do not stop local collection or reuse a failed peer projection. Secrets and inventories are never included in the dashboard or stdout status.
 - `scripts/peer-exchange.mjs` is a bounded stdin/stdout endpoint for an authenticated SSH session. It verifies the local platform and saved pairing, requires a local export before accepting the peer record, and returns the local record. It does not open a network listener or implement authentication itself. The caller must verify the SSH host and account. Protocol extras, wrong device identities and missing local exports are rejected.
 - `scripts/peer-transport.mjs` implements the optional Mac-initiated SSH caller. A private pairing may contain a validated Windows host alias and absolute executable, endpoint and runtime paths. The caller requires batch key authentication and strict host-key checking, disables password and interactive authentication, uses a 30-second bound, and sends records only through stdin. Mac collection publishes locally before attempting exchange, then merges either the received or previously cached peer record. Transport failure does not stop local publication. Windows merges the received Mac record on its next independent collection cycle.
@@ -33,7 +36,7 @@ The digest is not a signature. Revision selection is not payload validation or t
 ## Remaining implementation and verification
 
 1. Verify paired native collection against live sources, including actual comparison evidence from the same read as aggregate records.
-2. Add authenticated pairing setup, explicit rotation/revocation and initialization-recovery handling. Verify browser routes cannot read private state.
+2. Add authenticated pairing setup, explicit rotation and initialization-recovery handling, and verify the new native revocation controls interactively. Verify browser routes cannot read private state.
 3. Verify the implemented SSH caller from the packaged app's launch environment, including key availability and an actual network disconnect/reconnect. No reverse SSH access or new remote service is required.
 4. Verify the implemented native merge in both running app dashboards, including per-device timestamps and stale-source visibility. Never imply that an offline cached peer is current.
 5. Verify real disconnection, reconnection, repeated delivery, rotation, revocation and migration before replacing the working legacy collector or repackaging releases.

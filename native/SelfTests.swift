@@ -98,6 +98,17 @@ func runCollectorSelfTest() {
         precondition(number(object?["schema"]) == 2)
         let status = readObject(runtime.appendingPathComponent("public/local/collector.json"))
         precondition(number(status?["sourcesConfigured"]) == 0)
+        let configFile = runtime.appendingPathComponent("collector.config.json")
+        let originalConfig = try Data(contentsOf: configFile)
+        try PairingMaintenance.runDisconnect(runtime: runtime, resources: resources)
+        try PairingMaintenance.runDisconnect(runtime: runtime, resources: resources)
+        precondition(FileManager.default.fileExists(atPath: runtime.appendingPathComponent("private-sync/revoked").path))
+        let retainedConfig = try Data(contentsOf: configFile)
+        precondition(retainedConfig == originalConfig)
+        print("Packaged pairing revocation self-test passed with temporary data")
         print("Packaged collector self-test passed with all sources disabled")
-    } catch { preconditionFailure("Packaged collector self-test failed") }
+    } catch {
+        FileHandle.standardError.write(Data("Packaged collector self-test error code: \((error as NSError).code)\n".utf8))
+        preconditionFailure("Packaged collector self-test failed")
+    }
 }

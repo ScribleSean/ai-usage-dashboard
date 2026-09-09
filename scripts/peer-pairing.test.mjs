@@ -8,6 +8,7 @@ import {fileURLToPath} from 'node:url';
 import {createPairingConfigurations,validatePairing,initializePairing,readPairing} from './peer-pairing.mjs';
 import {createPeerPayload} from './peer-payload.mjs';
 import {createPeerRecord,acceptPeerState,readPeerState} from './peer-store.mjs';
+import {revokePairing} from './peer-revocation.mjs';
 
 async function fixture(t) {
   const runtime=await realpath(await mkdtemp(path.join(tmpdir(),'observatory-pairing-')));
@@ -62,9 +63,17 @@ test('normal native CLI loads pairing, publishes local state and merges a valida
     for(const secret of [pair.local.comparisonSalt,pair.local.pairId,pair.local.comparisonId])assert.ok(!dashboard.includes(secret));
     assert.ok(!dashboard.includes('inventory'));
     run();assert.equal((await readPeerState(runtime,pair.local,Date.now(),'local')).revision.sequence,2);
-    // Corrupt pairing must not stop standalone collection or reuse cached peer data.
-    await writeFile(path.join(runtime,'private-sync/pairing.json'),'{}');
+    // Corrupt configuration also withholds peer data without breaking collection.
+    const pairingFile=path.join(runtime,'private-sync/pairing.json');
+    await writeFile(pairingFile,'{}');
+    assert.equal(JSON.parse(run()).state,'partial');
+    const corrupt=JSON.parse(await readFile(path.join(runtime,'public/local/usage.json'),'utf8'));
+    assert.notEqual(corrupt.activity.find(row=>row.host===peerHost).checkedAt,at);
+    await writeFile(pairingFile,JSON.stringify(pair));
+    // Revocation must stop peer reuse while preserving normal local collection.
+    await revokePairing(runtime);
     assert.equal(JSON.parse(run()).state,'partial');
     const standalone=JSON.parse(await readFile(path.join(runtime,'public/local/usage.json'),'utf8'));
     assert.notEqual(standalone.activity.find(row=>row.host===peerHost).checkedAt,at);
+    assert.equal(JSON.parse(await readFile(path.join(runtime,'private-sync/pairing.json'),'utf8')).local.pairId,pair.local.pairId);
   });

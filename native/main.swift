@@ -64,6 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         items.addItem(withTitle: "Open Observatory", action: #selector(openDefault), keyEquivalent: "o").target = self
         items.addItem(withTitle: "Refresh sources", action: #selector(refresh), keyEquivalent: "r").target = self
         items.addItem(withTitle: "Local source settings…", action: #selector(sourceSettings), keyEquivalent: ",").target = self
+        items.addItem(withTitle: "Disconnect paired device…", action: #selector(disconnectPairing), keyEquivalent: "").target = self
         items.addItem(.separator())
         items.addItem(withTitle: "Quit Observatory", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         application.submenu = items
@@ -117,6 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         menu.addItem(withTitle: "Open Observatory", action: #selector(openDefault), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Refresh sources", action: #selector(refresh), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Local source settings…", action: #selector(sourceSettings), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Disconnect paired device…", action: #selector(disconnectPairing), keyEquivalent: "").target = self
         menu.addItem(.separator())
         let login = menu.addItem(withTitle: "Launch at login", action: #selector(toggleLogin), keyEquivalent: "")
         login.target = self
@@ -196,6 +198,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
     }
     @objc private func refresh() { store.refresh() }
+    @objc private func disconnectPairing() {
+        popover.performClose(nil)
+        let alert = NSAlert()
+        alert.messageText = "Disconnect paired device?"
+        guard !store.refreshing, !store.pairingMaintenance else {
+            alert.informativeText = "A local operation is running. Try again when it finishes."
+            alert.runModal()
+            return
+        }
+        guard FileManager.default.fileExists(atPath: store.runtime.appendingPathComponent("private-sync").path) else {
+            alert.informativeText = "No private pairing state was found for this installation."
+            alert.runModal()
+            return
+        }
+        alert.informativeText = "Disable pairing on this Mac only. Local collection continues and saved data is retained. A transfer already in flight may finish. Disconnect on the other device separately. Reconnection requires explicit repair, which is not available yet."
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Disconnect on this Mac")
+        guard alert.runModal() == .alertSecondButtonReturn else { return }
+        store.collectionPausedForPairing = true
+        guard !store.refreshing, !store.pairingMaintenance else {
+            let busy = NSAlert()
+            busy.messageText = "Disconnection is waiting"
+            busy.informativeText = "An operation started while confirmation was open. It may finish, but further collection is paused for this session. Retry disconnection when it finishes."
+            busy.runModal()
+            return
+        }
+        guard let resources = Bundle.main.resourceURL else { return }
+        store.pairingMaintenance = true
+        Task { @MainActor in
+            let result = NSAlert()
+            do {
+                try await PairingMaintenance.disconnect(runtime: store.runtime, resources: resources)
+                result.messageText = "Pairing disabled on this Mac"
+                result.informativeText = "Saved data remains. The dashboard will return to local-only data after the next successful collection. Disconnect the other device separately; SSH access is unchanged."
+                store.collectionPausedForPairing = false
+            } catch {
+                result.messageText = "Disconnection could not be verified"
+                result.informativeText = "Collection is paused for this session. Private state was not deleted, and pairing may already be disabled. Retry disconnection or quit the app until the pairing state can be inspected."
+            }
+            store.pairingMaintenance = false
+            store.refresh()
+            result.runModal()
+        }
+    }
     @objc private func openDefault() { openDashboard("activity") }
 
     @objc private func zoomIn() {
@@ -294,7 +340,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         store?.stop()
         // Keep a preview directory if collection is still shutting down. It contains
         // only this preview's settings/snapshots, never installed application state.
-        if let temporary = previewRuntime, store?.refreshing == false {
+        if let temporary = previewRuntime, store?.refreshing == false, store?.pairingMaintenance == false {
             try? FileManager.default.removeItem(at: temporary)
         }
     }

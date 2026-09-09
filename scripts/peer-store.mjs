@@ -7,6 +7,7 @@ import {isDeepStrictEqual} from 'node:util';
 import {parsePeerPayload} from './peer-payload.mjs';
 import {selectPeerRevision} from './peer-revision.mjs';
 import {privateSyncDirectory} from './peer-directory.mjs';
+import {assertPeerNotRevoked} from './peer-revocation.mjs';
 
 const limit=17_000_000;
 const schema="CREATE TABLE peer_state (slot TEXT PRIMARY KEY CHECK (slot IN ('local', 'peer')), record TEXT NOT NULL CHECK (length(record) <= 17000000))";
@@ -16,6 +17,7 @@ const validSlot=slot=>{if(!['local','peer'].includes(slot))throw Error('Invalid 
 
 async function locations(runtime,create=false) {
   const directory=await privateSyncDirectory(runtime,create);
+  await assertPeerNotRevoked(directory);
   // The JSON prototype was never released. Do not discard its watermark.
   for(const name of ['peer.json','write.lock']) {
     try {await lstat(path.join(directory,name));throw Error('Legacy development peer state requires explicit migration');}
@@ -65,6 +67,7 @@ async function database(runtime,create) {
     if(db.prepare('PRAGMA journal_mode').get().journal_mode!=='delete' ||
       db.prepare('PRAGMA page_size').get().page_size!==4096)throw Error('Unsupported peer database mode');
     db.exec('BEGIN IMMEDIATE');
+    await assertPeerNotRevoked(location.directory);
     db.exec('PRAGMA max_page_count=16384');
     if(created) {
       db.exec(schema);

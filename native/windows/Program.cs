@@ -13,6 +13,12 @@ internal static class Program
             catch (Exception error) { Console.Error.WriteLine(error.Message); Environment.ExitCode = 1; }
             return;
         }
+        if (args.Contains("--test-pairing"))
+        {
+            try { PairingMaintenance.SelfTest(); }
+            catch { Console.Error.WriteLine("Native pairing revocation self-test failed."); Environment.ExitCode = 1; }
+            return;
+        }
         if (args.Length == 2 && args[0] == "--collect-once")
         {
             if (!Path.IsPathFullyQualified(args[1]) || !Directory.Exists(args[1])) { Environment.ExitCode = 1; return; }
@@ -52,6 +58,7 @@ internal sealed class ObservatoryContext : ApplicationContext
         menu.Items.Add("Open Observatory", null, (_, _) => Open());
         menu.Items.Add("Refresh sources", null, async (_, _) => await collector.Refresh());
         menu.Items.Add("Configure local collection", null, (_, _) => Configure());
+        menu.Items.Add("Disconnect paired device…", null, async (_, _) => await DisconnectPairing());
         var startup = new ToolStripMenuItem("Register start at login");
         menu.Items.Add(startup);
         menu.Opening += (_, _) =>
@@ -87,6 +94,34 @@ internal sealed class ObservatoryContext : ApplicationContext
     }
 
     private JsonObject? Data() => Snapshot.Read(Path.Combine(runtime, "public", "local", "usage.json"));
+
+    private async Task DisconnectPairing()
+    {
+        if (collector.Busy)
+        {
+            MessageBox.Show("A local operation is running. Try again when it finishes.", "Disconnect paired device");
+            return;
+        }
+        if (!Directory.Exists(Path.Combine(runtime, "private-sync")))
+        {
+            MessageBox.Show("No private pairing state was found for this installation.", "Disconnect paired device");
+            return;
+        }
+        var answer = MessageBox.Show("Disable pairing on this Windows PC only? Local collection continues and saved data is retained. A transfer already in flight may finish. Disconnect the other device separately. Reconnection requires explicit repair, which is not available yet.",
+            "Disconnect paired device", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+        if (answer != DialogResult.Yes) return;
+        try
+        {
+            await collector.DisconnectPairing();
+            MessageBox.Show("Pairing is disabled on this PC. Saved data remains. The dashboard returns to local-only data after the next successful collection. Disconnect the other device separately; SSH access is unchanged.", "Pairing disabled");
+            await collector.Refresh();
+        }
+        catch
+        {
+            MessageBox.Show("Disconnection could not be verified. Collection is paused for this session. Private state was not deleted, and pairing may already be disabled. Retry disconnection or quit the app until the pairing state can be inspected.",
+                "Pairing needs attention", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
 
     private void Configure()
     {

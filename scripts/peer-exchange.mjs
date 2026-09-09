@@ -1,6 +1,7 @@
 import {fileURLToPath} from 'node:url';
 import {readPairing} from './peer-pairing.mjs';
 import {readPeerState,acceptPeerState} from './peer-store.mjs';
+import {assertPairingActive} from './peer-revocation.mjs';
 
 // This is a local stdin/stdout endpoint for an authenticated SSH session, not a
 // network listener. Its caller must authenticate the remote host and account.
@@ -13,6 +14,7 @@ export async function exchangePeerRecord(runtime,request,now=Date.now()) {
   const local=await readPeerState(runtime,pairing.local,now,'local');
   if(!local)throw Error('Local snapshot unavailable');
   await acceptPeerState(runtime,request.record,pairing.peer,now);
+  await assertPairingActive(runtime);
   return {version:1,record:local};
 }
 

@@ -10,6 +10,7 @@ internal sealed class Collector : IDisposable
     private readonly System.Windows.Forms.Timer timer = new() { Interval = 300000 };
     private readonly CancellationTokenSource lifetime = new();
     private bool busy;
+    private bool pairingPaused;
     internal event Action? Changed;
 
     internal Collector(string runtime)
@@ -21,6 +22,23 @@ internal sealed class Collector : IDisposable
 
     internal void Start() { timer.Start(); _ = Refresh(); }
     internal bool Configured => File.Exists(Path.Combine(runtime, "collector.config.json"));
+    internal bool Busy => busy;
+
+    internal async Task DisconnectPairing()
+    {
+        // The timer may have started work while the confirmation was open.
+        // Preserve the request to stop future collection even in that race.
+        pairingPaused = true;
+        if (busy || lifetime.IsCancellationRequested) throw new InvalidOperationException("A local operation is running.");
+        busy = true;
+        try
+        {
+            using var locked = new FileStream(Path.Combine(runtime, "collection.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            await PairingMaintenance.Disconnect(runtime, lifetime.Token);
+            pairingPaused = false;
+        }
+        finally { busy = false; }
+    }
 
     internal void Configure(string? distro, bool wispr = false)
     {
@@ -35,7 +53,7 @@ internal sealed class Collector : IDisposable
 
     internal async Task Refresh()
     {
-        if (busy || !Configured || lifetime.IsCancellationRequested) return;
+        if (busy || pairingPaused || !Configured || lifetime.IsCancellationRequested) return;
         busy = true;
         try
         {

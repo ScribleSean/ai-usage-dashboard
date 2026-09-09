@@ -10,6 +10,8 @@ final class ObservatoryStore: ObservableObject {
     @Published var now = Date()
     let runtime: URL
     private(set) var localCollection = false
+    var pairingMaintenance = false
+    var collectionPausedForPairing = false
     private var process: Process?
     private var pollTimer: Timer?
     private var refreshTimer: Timer?
@@ -59,7 +61,7 @@ final class ObservatoryStore: ObservableObject {
     }
 
     func refresh() {
-        guard process == nil else { return }
+        guard process == nil, !pairingMaintenance, !collectionPausedForPairing else { return }
         guard let resources = Bundle.main.resourceURL,
               let local = try? CollectorConfiguration.prepare(runtime: runtime),
               let launch = try? CollectorConfiguration.launch(runtime: runtime, resources: resources, local: local) else {
