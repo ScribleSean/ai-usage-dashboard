@@ -14,6 +14,7 @@ Status reviewed September 9, 2026. A passing development-machine test is not a c
 | Windows installer | An unsigned installer and checksum were prepared. Its isolated test identity passed install, shortcut, payload, overwrite-refusal, linked-directory, uninstall, reinstall and data-preservation checks. The ordinary installer has not been installed or published. |
 | Native source reads | Packaged development checks read Mac ActivityWatch, Codex, Wispr and TypeWhisper metadata; Windows checks read local ActivityWatch, Codex, Wispr and optional Ubuntu Codex records. These are one-setup checks with explicit unavailable states. |
 | Aggregation | Tests cover overlapping intervals, repeated records, local midnight, daylight saving time, invalid/missing hosts and private-field filtering. Cross-host token overlap blocks combined totals instead of guessing. |
+| npm dependencies | September 9 lockfile-only audit reports zero known vulnerabilities. Clean Windows install, tests (121 pass, eight platform skips), TypeScript and both builds pass. Native UI files remain byte-identical. This does not audit bundled runtimes, OS webviews or application logic. See [security scope](../SECURITY.md). |
 
 Binary candidates retain their embedded source revisions even when later source-only changes are synced. Never relabel an older artifact as a newer build. Rebuild and reverify affected binaries before final publication.
 
@@ -25,7 +26,7 @@ Binary candidates retain their embedded source revisions even when later source-
 - **Lifecycle:** verify actual login startup and sleep/wake, idle and collection resource use, and orderly shutdown on both platforms. A short all-sources-disabled Mac baseline was about 69 MiB for the native process only; it does not establish normal collection cost or total WebKit memory.
 - **Migration:** exercise the installed app's settings preservation, version update, rollback and uninstall. The Windows isolated test covers same-schema reinstall, not every future migration. Do not overwrite the owner's working installation to claim this gate.
 - **Interface:** finish all-view, keyboard, narrow-layout and enlarged-text checks in the native renderers. A rendered view or source-level test is not a full accessibility review.
-- **Security review:** review current dependency advisories and actual exposure, verify final artifact privacy and integrity, and disclose unsigned/unnotarized warnings. Do not call the app vulnerability-free.
+- **Security review:** npm dependency review is recorded above. Complete the remaining runtime/application review, verify final artifact privacy and integrity, and disclose unsigned/unnotarized warnings. Recheck advisories before publication. Do not call the app vulnerability-free.
 - **Publication:** publish versioned artifacts, checksums, changelog and accurate download links only after the applicable gates pass. Keep the README concise and detailed instructions in this folder. Use synthetic data for screenshots or a later demonstration video.
 
 ## Later coverage, not claims of this release
