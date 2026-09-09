@@ -34,10 +34,18 @@ The light-theme spot check exposed stale header-button backgrounds during color 
 
 The final candidate passed Mac signature, self-test, bundled-collector, WebKit and lifecycle checks. The shared UI passed TypeScript and both builds on Windows. No new dependencies or installed-app changes were required.
 
+## Populated and keyboard follow-up, candidates `9eba4db` and `ca8c7e7`
+
+Fixed fictional records were loaded into isolated Mac previews with all collectors disabled. All five populated views were inspected. Representative keyboard-only paths covered Activity week bands and day navigation, Tokens periods/hosts/model details, nested Agents disclosures, Dictation provider/device/history choices and Sources privacy guidance. Tab, Shift-Tab, arrow keys where supported and Enter operated these paths with visible focus.
+
+These checks exposed stale selected-button backgrounds in the period and dictation controls even though data and accessibility states updated. Their inherited transitions are now disabled, without changing counting logic or the underlying controls. Rebuilt Mac previews verified Day/Week/All time and all three dictation selection groups in both directions, with matching highlights and totals. Typechecking, both web builds, native checks and hosted CI passed.
+
+The `ca8c7e7` Mac ZIP includes these fixes and passed extraction plus relocated runtime/lifecycle checks. The matching Windows package passed all 997 payload hashes, and its separate installer test identity passed the installation suite. A signed-in Windows synthetic smoke test verified dashboard initialization and local snapshot fetch; the Activity capture was visually inspected. This is one configured machine, not clean-machine compatibility or full Windows interaction coverage.
+
 ## Still open
 
-- Check populated synthetic records and complete keyboard focus order, including both themes and enlarged layouts. The empty-state and selected expanded-detail checks above do not cover those cases.
+- Complete every-control focus-order and screen-reader review, including populated views in both themes and enlarged layouts. The representative keyboard paths above are not an exhaustive accessibility audit.
 - Repeat the interaction and layout checks in Windows WebView2. A Windows web build does not prove Windows-native interaction behavior.
-- Verify the final packaged release, not only this development candidate. Existing ZIP and installer artifacts retain their earlier revisions and do not contain these UI fixes.
+- Complete the remaining release checks on the final candidate. The current ZIP and installer artifacts embed `ca8c7e7`; documentation-only commits do not change their embedded revision or require relabeling them.
 
 See the [release checklist](RELEASE-CHECKLIST.md) for the remaining installation, lifecycle, security and publication gates.
