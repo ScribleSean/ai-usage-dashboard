@@ -15,6 +15,21 @@ func runSelfTests() {
     precondition(snapshot.latest("dictation", host: "Windows", source: "Wispr Flow") == nil)
     precondition(snapshot.latest("dictation", host: "Mac", source: "TypeWhisper") == nil)
     precondition(snapshot.sourceCounts.read == 1 && snapshot.sourceCounts.total == 2)
+    let combined = Snapshot(object: [
+        "combined": ["status": "ok", "days": [["date": "2026-09-08", "seconds": 90]]],
+        "combinedTokens": ["status": "ok", "verification": ["status": "verified"],
+                           "days": [["date": "2026-09-08", "totalTokens": 600]]],
+        "dictation": [source]])
+    precondition(number(combined.latest("activity", host: "All")?["seconds"]) == 90)
+    precondition(number(combined.latest("tokens", host: "All")?["totalTokens"]) == 600)
+    precondition(combined.latest("dictation", host: "All", source: "Wispr Flow") == nil)
+    let unverified = Snapshot(object: ["combinedTokens": ["status": "ok",
+        "days": [["date": "2026-09-08", "totalTokens": 600]]]])
+    precondition(unverified.latest("tokens", host: "All") == nil)
+    precondition(snapshot.latest("activity", host: "All") == nil)
+    let unavailable = Snapshot(object: ["combined": ["status": "unavailable",
+        "days": [["date": "2026-09-08", "seconds": 90]]]])
+    precondition(unavailable.latest("activity", host: "All") == nil)
     let resolver = AssetResolver(root: URL(fileURLWithPath: "/tmp/observatory-test-assets"))
     precondition(resolver.resolve(URL(string: "observatory://app/index.html")!) != nil)
     precondition(resolver.resolve(URL(string: "observatory://app/assets/app.js")!) != nil)

@@ -50,9 +50,22 @@ struct Snapshot {
         return (sources.filter { text($0["status"]) == "ok" }.count, sources.count)
     }
     func latest(_ key: String, host: String, source: String? = nil) -> JSONObject? {
-        guard let item = rows(object[key]).first(where: {
-            text($0["host"]) == host && (source == nil || text($0["source"]) == source)
-        }), text(item["status"]) == "ok" else { return nil }
+        let selected: JSONObject?
+        if host == "All" {
+            // Reuse collector-verified aggregates. Never sum device snapshots here.
+            if key == "activity" { selected = object["combined"] as? JSONObject }
+            else if key == "tokens" {
+                let combined = object["combinedTokens"] as? JSONObject
+                guard let verification = combined?["verification"] as? JSONObject,
+                      text(verification["status"]) == "verified" else { return nil }
+                selected = combined
+            } else { return nil }
+        } else {
+            selected = rows(object[key]).first(where: {
+                text($0["host"]) == host && (source == nil || text($0["source"]) == source)
+            })
+        }
+        guard let item = selected, text(item["status"]) == "ok" else { return nil }
         return rows(item["days"]).sorted { text($0["date"]) < text($1["date"]) }.last
     }
 }

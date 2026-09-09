@@ -119,6 +119,8 @@ With an existing ignored `local.config.json`, `node native/install.mjs --install
 
 Click the telescope menu-bar icon for a compact summary. Open Observatory shows the full detail window. Closing that window releases its renderer but leaves the menu-bar app running. The app refreshes every five minutes while the Mac is awake and logged in, retries after wake, and preserves the preceding snapshot if a collection fails. Individual unavailable sources are labeled rather than filled with zeros. Windows sources still require the configured SSH hosts and their installed tools.
 
+The panel's All option uses the collector's overlap-aware Mac and Windows active time and verified Mac, Windows and Ubuntu token totals. WSL activity is part of Windows screen time, not an extra desktop to add. Dictation remains per device because synced history may overlap. Missing or unverified combined totals stay unavailable.
+
 Right-click the icon to change Launch at login or quit. This is a locally ad-hoc-signed build, not a notarized distributable or an automatic-update system. ActivityWatch remains a separate collector and is not uninstalled by this app.
 
 ### Web development

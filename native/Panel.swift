@@ -38,23 +38,32 @@ struct ObservatoryPanel: View {
                         .strokeBorder(.white.opacity(0.09), lineWidth: 0.5))
                 }
                 Picker("Source host", selection: $host) {
-                    ForEach(["Mac", "Windows", "Ubuntu"], id: \.self) { Text($0).tag($0) }
+                    ForEach(["All", "Mac", "Windows", "Ubuntu"], id: \.self) { Text($0).tag($0) }
                 }.pickerStyle(.segmented)
 
                 VStack(spacing: 0) {
                     let activity = snapshot.latest("activity", host: host)
                     stat("Active time", icon: "waveform.path", value: minutes(number(activity?["seconds"])),
-                         date: text(activity?["date"], fallback: "No retained records"), target: "activity")
+                         date: text(activity?["date"], fallback: "No retained records") + (host == "All" ? " · Mac + Windows" : ""), target: "activity")
                     Divider().opacity(0.35).padding(.leading, 39)
                     let tokens = snapshot.latest("tokens", host: host)
                     stat("Tokens", icon: "square.stack.3d.up", value: formatted(number(tokens?["totalTokens"]), compact: true),
-                         date: text(tokens?["date"], fallback: "No retained records"), target: "tokens")
+                         date: text(tokens?["date"], fallback: host == "All" ? "Combined total unavailable" : "No retained records"), target: "tokens")
                     Divider().opacity(0.35).padding(.leading, 39)
                     let wispr = snapshot.latest("dictation", host: host, source: "Wispr Flow")
                     let covered = number(wispr?["audioRecords"]) ?? 0
                     let partial = covered < (number(wispr?["transcriptions"]) ?? 0)
-                    stat("Wispr audio", icon: "waveform", value: covered > 0 ? minutes(number(wispr?["audioSeconds"])) : "Unknown",
-                         date: text(wispr?["date"], fallback: "No retained records") + (partial ? " · partial" : ""), target: "dictation")
+                    if host == "All" {
+                        stat("Wispr audio", icon: "waveform", value: "By device",
+                             date: "Synced records can overlap", target: "dictation")
+                    } else {
+                        stat("Wispr audio", icon: "waveform", value: covered > 0 ? minutes(number(wispr?["audioSeconds"])) : "Unknown",
+                             date: text(wispr?["date"], fallback: "No retained records") + (partial ? " · partial" : ""), target: "dictation")
+                    }
+                }
+                if host == "All" {
+                    Text("Tokens include Mac, Windows and Ubuntu. WSL activity is part of Windows screen time.")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
                 let counts = snapshot.sourceCounts
                 HStack(spacing: 6) {
