@@ -16,7 +16,8 @@ async function windowsPermissions(directory,initialize=false) {
 }
 
 export async function privateCollectorDirectory(runtime,name,create=false) {
-  if(!['private-sync','private-codex'].includes(name))throw Error('Invalid private directory purpose');
+  if(!['private-sync','private-codex','private-repair','private-quota'].includes(name) &&
+    !/^private-sync-retired-[a-f0-9]{64}$/.test(name))throw Error('Invalid private directory purpose');
   if(typeof runtime!=='string' || !path.isAbsolute(runtime) || path.resolve(runtime)!==await realpath(runtime))
     throw Error('Use a canonical private runtime directory');
   const root=await lstat(runtime);

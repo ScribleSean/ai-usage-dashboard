@@ -1,7 +1,9 @@
 param([Parameter(Mandatory=$true)][string]$Directory, [switch]$Initialize)
 $ErrorActionPreference = 'Stop'
 try {
-    if (-not [IO.Path]::IsPathRooted($Directory) -or [IO.Path]::GetFileName($Directory) -notin @('private-sync', 'private-codex')) { throw 'Invalid directory' }
+    $leaf = [IO.Path]::GetFileName($Directory)
+    if (-not [IO.Path]::IsPathRooted($Directory) -or
+        ($leaf -notin @('private-sync', 'private-codex', 'private-repair', 'private-quota') -and $leaf -cnotmatch '^private-sync-retired-[a-f0-9]{64}$')) { throw 'Invalid directory' }
     $userSid = [Security.Principal.WindowsIdentity]::GetCurrent().User
     $allowed = @($userSid.Value, 'S-1-5-18', 'S-1-5-32-544')
     if ($Initialize) {
