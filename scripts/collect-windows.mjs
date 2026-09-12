@@ -11,6 +11,8 @@ import {preparePeerCollection} from './peer-collection.mjs';
 import {readPairing} from './peer-pairing.mjs';
 import {finalizePeerCollection} from './peer-finalize.mjs';
 import {privateCollectorDirectory} from './peer-directory.mjs';
+import {collectQuota,attachQuota} from './collect-quota.mjs';
+import {findWindowsQuotaClient,readWindowsQuotaSnapshot} from './windows-quota.mjs';
 
 const scripts=path.dirname(fileURLToPath(import.meta.url));
 const unavailable=host=>({host,status:'unavailable',checkedAt:new Date().toISOString()});
@@ -80,6 +82,15 @@ export async function collectWindows(runtime,peerConfig=null) {
   const result=windowsSnapshot({localSettings,ubuntuSettings,windows,wispr},previous,collectedAt,pairing?.config??null);
   if((peerConfig && !pairing) || pairingFailed)result.peer={status:'unavailable'};
   await finalizePeerCollection(runtime,result,savedPairing,previous);
+  let quota;
+  try {quota=await collectQuota(runtime,{enabled:config.quota,
+    resolveExecutable:()=>findWindowsQuotaClient(config.quotaWslDistribution),readSnapshot:readWindowsQuotaSnapshot,
+    isEnabled:async()=>{
+      const current=windowsCollectorConfig(JSON.parse(await readFile(path.join(runtime,'collector.config.json'),'utf8')));
+      return current.quota && current.quotaWslDistribution===config.quotaWslDistribution;
+    }});}
+  catch {quota={status:'unavailable',provider:'Codex',scope:'account',windows:[],history:[],dailyUsageBuckets:[]};}
+  attachQuota(result,quota);
   const {data,status}=result;
   await atomic('usage.json',data);
   await atomic('collector.json',{...status,startedAt,finishedAt:new Date().toISOString(),

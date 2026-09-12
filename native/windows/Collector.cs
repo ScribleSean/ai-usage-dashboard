@@ -24,7 +24,10 @@ internal sealed class Collector : IDisposable
     internal bool Configured => File.Exists(Path.Combine(runtime, "collector.config.json"));
     internal bool Busy => busy;
 
-    internal async Task DisconnectPairing()
+    internal Task DisconnectPairing() => MaintainPairing(false);
+    internal Task PreparePairingRepair() => MaintainPairing(true);
+
+    private async Task MaintainPairing(bool repair)
     {
         // The timer may have started work while the confirmation was open.
         // Preserve the request to stop future collection even in that race.
@@ -34,17 +37,19 @@ internal sealed class Collector : IDisposable
         try
         {
             using var locked = new FileStream(Path.Combine(runtime, "collection.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
-            await PairingMaintenance.Disconnect(runtime, lifetime.Token);
+            if (repair) await PairingMaintenance.PrepareRepair(runtime, lifetime.Token);
+            else await PairingMaintenance.Disconnect(runtime, lifetime.Token);
             pairingPaused = false;
         }
         finally { busy = false; }
     }
 
-    internal void Configure(string? distro, bool wispr = false)
+    internal void Configure(string? distro, bool wispr = false, bool quota = false, string? quotaDistro = null)
     {
         if (distro is not null && !Regex.IsMatch(distro, "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")) throw new ArgumentException("Invalid distribution");
+        if (quotaDistro is not null && !Regex.IsMatch(quotaDistro, "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")) throw new ArgumentException("Invalid quota distribution");
         var file = Path.Combine(runtime, "collector.config.json");
-        var settings = new JsonObject { ["activity"] = true, ["codex"] = true, ["wispr"] = wispr, ["wslDistribution"] = distro };
+        var settings = new JsonObject { ["activity"] = true, ["codex"] = true, ["wispr"] = wispr, ["wslDistribution"] = distro, ["quota"] = quota, ["quotaWslDistribution"] = quotaDistro };
         File.WriteAllText(file + ".tmp", settings.ToJsonString());
         File.Move(file + ".tmp", file, true);
     }

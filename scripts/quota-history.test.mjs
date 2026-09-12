@@ -20,6 +20,14 @@ test('offline readings remain stale with original timestamp and no fabricated sa
   assert.equal(next.status,'stale');assert.equal(next.asOf,history.asOf);
   assert.deepEqual(next.samples,history.samples);
 });
+test('retired allowance windows are removed when saved history is reopened',()=>{
+  const old={...reading(),windows:[...reading().windows,
+    {bucket:'codex_bengalfox',window:'primary',remainingPercent:100},
+    {bucket:'spark',window:'primary',remainingPercent:50}]};
+  const previous={version:1,scope,samples:[old]};
+  const restored=retainQuotaHistory(previous,{status:'unavailable'},options);
+  assert.deepEqual(restored.samples[0].windows.map(row=>row.bucket),['codex']);
+});
 test('account switches, sign-out and disabling cannot reveal previous readings',()=>{
   const history=retainQuotaHistory(null,reading(),options);
   for(const status of ['needs-auth','unsupported']) {

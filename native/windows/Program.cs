@@ -9,7 +9,7 @@ internal static class Program
     {
         if (args.Contains("--self-test"))
         {
-            try { Snapshot.SelfTest(); LoginStartup.SelfTest(); }
+            try { Snapshot.SelfTest(); LoginStartup.SelfTest(); PairingDetails.SelfTest(); }
             catch (Exception error) { Console.Error.WriteLine(error.Message); Environment.ExitCode = 1; }
             return;
         }
@@ -30,6 +30,21 @@ internal static class Program
             return;
         }
         ApplicationConfiguration.Initialize();
+        if (args.Length == 2 && args[0] == "--test-usage-popup")
+        {
+            if (!Path.IsPathFullyQualified(args[1]) || !Directory.Exists(args[1]) ||
+                File.GetAttributes(args[1]).HasFlag(FileAttributes.ReparsePoint) || Directory.EnumerateFileSystemEntries(args[1]).Any())
+            { Environment.ExitCode = 1; return; }
+            UsagePopupTests.Run(args[1]);
+            return;
+        }
+        if (args.Length == 2 && args[0] == "--test-pairing-details")
+        {
+            if (!Path.IsPathFullyQualified(args[1]) || !Directory.Exists(args[1])) { Environment.ExitCode = 1; return; }
+            try { PairingDetailsDialog.RunDialogTest(args[1]); }
+            catch { Console.Error.WriteLine("Pairing details dialog failed."); Environment.ExitCode = 1; }
+            return;
+        }
         if (args.Length == 2 && args[0] is "--test-web" or "--test-first-run")
         {
             if (!Path.IsPathFullyQualified(args[1]) || !Directory.Exists(args[1])) { Environment.ExitCode = 1; return; }
@@ -37,8 +52,13 @@ internal static class Program
             return;
         }
         using var singleton = new Mutex(true, "Local\\WorkspaceObservatory", out var first);
-        if (!first) return;
-        Application.Run(new ObservatoryContext());
+        using var activation = new EventWaitHandle(false, EventResetMode.AutoReset, "Local\\WorkspaceObservatory.Open");
+        if (!first)
+        {
+            if (!args.Contains("--background")) activation.Set();
+            return;
+        }
+        Application.Run(new ObservatoryContext(activation, !args.Contains("--background")));
     }
 }
 
@@ -47,18 +67,23 @@ internal sealed class ObservatoryContext : ApplicationContext
     private readonly string runtime = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Workspace Observatory");
     private readonly NotifyIcon tray;
     private readonly Collector collector;
+    private readonly System.Windows.Forms.Timer activationTimer = new() { Interval = 200 };
     private Dashboard? dashboard;
+    private UsagePopup? usagePopup;
     private readonly System.Windows.Forms.Timer timer = new() { Interval = 30000 };
 
-    internal ObservatoryContext()
+    internal ObservatoryContext(EventWaitHandle activation, bool show)
     {
         Directory.CreateDirectory(runtime);
         collector = new Collector(runtime);
         var menu = new ContextMenuStrip();
         menu.Items.Add("Open Observatory", null, (_, _) => Open());
+        menu.Items.Add("Usage overview", null, (_, _) => ShowUsage());
         menu.Items.Add("Refresh sources", null, async (_, _) => await collector.Refresh());
         menu.Items.Add("Configure local collection", null, (_, _) => Configure());
+        menu.Items.Add("Pairing details for Mac…", null, (_, _) => ShowPairingDetails());
         menu.Items.Add("Disconnect paired device…", null, async (_, _) => await DisconnectPairing());
+        menu.Items.Add("Prepare pairing repair…", null, async (_, _) => await PreparePairingRepair());
         var startup = new ToolStripMenuItem("Register start at login");
         menu.Items.Add(startup);
         menu.Opening += (_, _) =>
@@ -86,14 +111,36 @@ internal sealed class ObservatoryContext : ApplicationContext
         tray = new NotifyIcon { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Application,
             Text = "Workspace Observatory", ContextMenuStrip = menu, Visible = true };
         tray.DoubleClick += (_, _) => Open();
+        tray.MouseClick += (_, args) => { if (args.Button == MouseButtons.Left) ShowUsage(); };
         timer.Tick += (_, _) => RefreshStatus();
         timer.Start();
         RefreshStatus();
         collector.Changed += RefreshStatus;
         if (collector.Configured) collector.Start();
+        activationTimer.Tick += (_, _) => { if (activation.WaitOne(0)) Open(); };
+        activationTimer.Start();
+        if (show) Open();
     }
 
     private JsonObject? Data() => Snapshot.Read(Path.Combine(runtime, "public", "local", "usage.json"));
+
+    private void ShowUsage()
+    {
+        if (usagePopup is not null && !usagePopup.IsDisposed) { usagePopup.Close(); return; }
+        usagePopup = new UsagePopup(Data, collector.Refresh, Open);
+        usagePopup.FormClosed += (_, _) => usagePopup = null;
+        usagePopup.ShowNearTray();
+    }
+
+    private void ShowPairingDetails()
+    {
+        try
+        {
+            using var dialog = new PairingDetailsDialog(PairingDetails.FromInstallation(AppContext.BaseDirectory, runtime));
+            dialog.ShowDialog();
+        }
+        catch { MessageBox.Show("Pairing details are unavailable for this installation. No settings were changed.", "Windows pairing details"); }
+    }
 
     private async Task DisconnectPairing()
     {
@@ -107,7 +154,7 @@ internal sealed class ObservatoryContext : ApplicationContext
             MessageBox.Show("No private pairing state was found for this installation.", "Disconnect paired device");
             return;
         }
-        var answer = MessageBox.Show("Disable pairing on this Windows PC only? Local collection continues and saved data is retained. A transfer already in flight may finish. Disconnect the other device separately. Reconnection requires explicit repair, which is not available yet.",
+        var answer = MessageBox.Show("Disable pairing on this Windows PC only? Local collection continues and saved data is retained. A transfer already in flight may finish. Disconnect the other device separately. To reconnect, prepare pairing repair on both devices and pair again from the Mac.",
             "Disconnect paired device", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
         if (answer != DialogResult.Yes) return;
         try
@@ -123,8 +170,32 @@ internal sealed class ObservatoryContext : ApplicationContext
         }
     }
 
+    private async Task PreparePairingRepair()
+    {
+        if (collector.Busy)
+        {
+            MessageBox.Show("A local operation is running. Try again when it finishes.", "Prepare pairing repair");
+            return;
+        }
+        var answer = MessageBox.Show("If this PC has pairing state, disable it and retain a private backup? Otherwise, confirm this PC is ready for repair. Nothing is deleted or sent. A transfer already in flight may finish. Confirm Prepare pairing repair on the Mac separately, then use Pair with Windows there to create fresh credentials. Retirement cannot be undone by this action.",
+            "Prepare pairing repair", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+        if (answer != DialogResult.Yes) return;
+        try
+        {
+            await collector.PreparePairingRepair();
+            MessageBox.Show("This PC is ready for a new pairing. Any retired state remains in a disabled private backup. Prepare repair on the Mac separately, then choose Pair with Windows there. Local collection can continue. This action has not enabled a new pairing.", "Repair prepared");
+            await collector.Refresh();
+        }
+        catch
+        {
+            MessageBox.Show("Repair preparation could not be verified. Collection is paused for this session. Saved state was not deleted, but it may already be retired. Retry or quit until this installation can be inspected. Do not restore old pairing files over a new pairing.",
+                "Pairing needs attention", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
     private void Configure()
     {
+        if (collector.Busy) { MessageBox.Show("Wait for the current collection to finish before changing sources.", "Source settings"); return; }
         var answer = MessageBox.Show("Enable local ActivityWatch and saved Codex usage collection? Only approved usage metadata enters the dashboard, not prompts or window titles.",
             "Workspace Observatory", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
         if (answer != DialogResult.Yes) return;
@@ -132,12 +203,24 @@ internal sealed class ObservatoryContext : ApplicationContext
             "Ubuntu collection", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
         var wispr = MessageBox.Show("Include Wispr Flow word counts and recorded audio duration? Transcripts and recordings are not read.",
             "Optional dictation statistics", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
-        collector.Configure(wsl ? "Ubuntu" : null, wispr);
+        var quota = MessageBox.Show("Read online Codex account limits and daily token history using the installed Codex sign-in? Readings stay on this PC. Choosing No clears Observatory's retained account readings without signing Codex out.",
+            "Optional account usage", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
+        string? quotaDistro = null;
+        if (quota)
+        {
+            var accountSource = MessageBox.Show("Use Ubuntu's existing Codex client and signed-in account for usage limits? This may start Ubuntu WSL during refreshes, independently of log collection. Yes selects Ubuntu. No selects the native Windows Codex client. Cancel leaves settings unchanged. No client is installed and no credentials are copied.",
+                "Account usage source", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button3);
+            if (accountSource == DialogResult.Cancel) return;
+            quotaDistro = accountSource == DialogResult.Yes ? "Ubuntu" : null;
+        }
+        if (collector.Busy) { MessageBox.Show("Collection started while settings were open. Try again after it finishes. Settings have not changed.", "Source settings"); return; }
+        collector.Configure(wsl ? "Ubuntu" : null, wispr, quota, quotaDistro);
         collector.Start();
     }
 
     private void RefreshStatus()
     {
+        usagePopup?.Reload();
         var stamp = Snapshot.Text(Data()?["collectedAt"], "");
         tray.Text = DateTimeOffset.TryParse(stamp, out var at)
             ? $"Observatory · updated {Math.Max(0, (int)(DateTimeOffset.UtcNow - at).TotalMinutes)}m ago"
@@ -159,6 +242,7 @@ internal sealed class ObservatoryContext : ApplicationContext
 
     private void Open()
     {
+        usagePopup?.Close();
         if (dashboard is null || dashboard.IsDisposed)
         {
             dashboard = new Dashboard(runtime);
@@ -171,7 +255,8 @@ internal sealed class ObservatoryContext : ApplicationContext
 
     protected override void ExitThreadCore()
     {
-        timer.Stop(); timer.Dispose(); collector.Dispose(); dashboard?.Close(); tray.Visible = false; tray.Dispose();
+        activationTimer.Stop(); activationTimer.Dispose();
+        timer.Stop(); timer.Dispose(); collector.Dispose(); dashboard?.Close(); usagePopup?.Close(); tray.Visible = false; tray.Dispose();
         base.ExitThreadCore();
     }
 }

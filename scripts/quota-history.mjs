@@ -1,3 +1,5 @@
+import {visibleQuotaBucket} from './quota-buckets.mjs';
+
 // Retained account observations, not a conversion from tokens to allowance.
 // The caller supplies a local, opaque account scope and never a raw account ID.
 const stamp = value => typeof value === 'string' && Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : null;
@@ -12,7 +14,7 @@ export function cleanQuotaObservation(raw, now) {
   if (!checkedAt || Date.parse(checkedAt) > now || !Array.isArray(raw.windows) || raw.windows.length > 32) return null;
   const windows = new Map();
   for (const row of raw.windows) {
-    if (!row || typeof row.bucket !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(row.bucket) || !['primary','secondary'].includes(row.window) ||
+    if (!row || typeof row.bucket !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(row.bucket) || !visibleQuotaBucket(row.bucket) || !['primary','secondary'].includes(row.window) ||
         typeof row.remainingPercent !== 'number' || !Number.isFinite(row.remainingPercent) ||
         row.remainingPercent < 0 || row.remainingPercent > 100) continue;
     windows.set(`${row.bucket}:${row.window}`,{bucket:row.bucket,window:row.window,remainingPercent:row.remainingPercent,

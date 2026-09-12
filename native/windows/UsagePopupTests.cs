@@ -1,0 +1,133 @@
+using System.Drawing.Imaging;
+using System.Security.Cryptography;
+using System.Text.Json.Nodes;
+
+namespace WorkspaceObservatory;
+
+internal static class UsagePopupTests
+{
+    // Exercise the production form with in-memory fixtures and inert callbacks.
+    // Capture only this form and its chart controls, never the desktop.
+    internal static void Run(string output)
+    {
+        var data = Fixture();
+        var refreshed = 0;
+        var opened = 0;
+        using var popup = new UsagePopup(() => data, () => { refreshed++; return Task.CompletedTask; }, () => opened++);
+        popup.Shown += async (_, _) =>
+        {
+            try
+            {
+                // Native progress bars animate toward their assigned values.
+                await Task.Delay(1000);
+                Check(popup.Visible && Screen.AllScreens.Any(screen => screen.WorkingArea.Contains(popup.Bounds)), "Popup is not fully on screen.");
+                var controls = Descendants(popup).ToArray();
+                Check(controls.OfType<ProgressBar>().Count() == 2, "Expected two compact allowance bars.");
+                Check(controls.OfType<ProgressBar>().Select(bar => bar.Value).SequenceEqual(new[] { 568, 584 }), "Allowance bar values differ from fixture.");
+                Check(!controls.OfType<Label>().Any(label => label.Text.Contains("bengalfox")), "Retired allowance is visible.");
+                Check(!controls.OfType<FlowLayoutPanel>().Single().AutoScroll, "Popup must not scroll.");
+                Check(controls.All(control => control.Parent!.ClientRectangle.Contains(control.Bounds)), "A popup control is clipped.");
+                Capture(popup, output, "popup-latest");
+                // Detailed charts are tested independently, not embedded in the compact tray popup.
+                var quota = (JsonObject)data["quota"]!;
+                var windows = ((JsonArray)quota["windows"]!).OfType<JsonObject>().Take(3).ToArray();
+                using var graph = new QuotaGraph(quota, windows[0]) { Width = 360, Height = 145 };
+                var hashes = new HashSet<string>();
+                for (var index = 0; index < windows.Length; index++)
+                {
+                    graph.SelectWindow(windows[index]);
+                    await Task.Delay(50);
+                    hashes.Add(Capture(graph, output, "quota-window-" + index));
+                    Check(graph.AccessibleDescription?.Contains("Allowance used starts at") == true, "History has no accessible value summary.");
+                }
+                Check(hashes.Count == 3, "Selecting a window did not change the rendered history.");
+                using var daily = new DailyTokenGraph(quota) { Width = 360, Height = 125 };
+                Capture(daily, output, "daily-tokens");
+                Check(daily.AccessibleDescription?.Contains("tokens") == true, "Daily totals are not described accessibly.");
+
+                data["quota"]!["status"] = "stale";
+                popup.Reload();
+                await Task.Delay(1000);
+                Check(Descendants(popup).OfType<Label>().Any(label => label.Text.StartsWith("Saved reading")), "Saved reading is not identified.");
+                Capture(popup, output, "popup-stale");
+
+                data["quota"] = new JsonObject { ["status"] = "needs-auth", ["windows"] = new JsonArray() };
+                popup.Reload();
+                Check(!Descendants(popup).OfType<ProgressBar>().Any() && !Descendants(popup).OfType<QuotaGraph>().Any(), "Missing limits rendered as a value.");
+                Check(Descendants(popup).OfType<Label>().Any(label => label.Text.Contains("Sign in through Codex")), "Missing sign-in guidance.");
+                Capture(popup, output, "popup-unavailable");
+
+                var buttons = Descendants(popup).OfType<Button>().ToArray();
+                var layout = Descendants(popup).OfType<FlowLayoutPanel>().Single();
+                var refresh = buttons.Single(button => button.Text == "Refresh sources");
+                Check(layout.ClientRectangle.Contains(refresh.Bounds), "Refresh is outside the popup.");
+                refresh.PerformClick();
+                Check(refreshed == 1, "Refresh did not invoke its callback exactly once.");
+                var open = Descendants(popup).OfType<Button>().Single(button => button.Text == "Open Observatory");
+                Check(layout.ClientRectangle.Contains(open.Bounds), "Open is outside the popup.");
+                open.PerformClick();
+                Check(opened == 1 && !popup.Visible, "Open did not close the popup and invoke navigation exactly once.");
+                File.WriteAllText(Path.Combine(output, "result.txt"), "usage-popup: passed");
+            }
+            catch (Exception error)
+            {
+                File.WriteAllText(Path.Combine(output, "result.txt"), "usage-popup: failed: " + error.Message);
+                Environment.ExitCode = 1;
+            }
+            finally { popup.Close(); }
+        };
+        popup.ShowNearTray();
+        Application.Run(popup);
+    }
+
+    private static void Check(bool condition, string message)
+    {
+        if (!condition) throw new InvalidOperationException(message);
+    }
+
+    private static IEnumerable<Control> Descendants(Control parent)
+    {
+        foreach (Control child in parent.Controls)
+        {
+            yield return child;
+            foreach (var descendant in Descendants(child)) yield return descendant;
+        }
+    }
+
+    private static string Capture(Control control, string output, string name)
+    {
+        control.PerformLayout();
+        using var image = new Bitmap(control.Width, control.Height);
+        control.DrawToBitmap(image, new Rectangle(Point.Empty, image.Size));
+        using var bytes = new MemoryStream();
+        image.Save(bytes, ImageFormat.Png);
+        var payload = bytes.ToArray();
+        File.WriteAllBytes(Path.Combine(output, name + ".png"), payload);
+        return Convert.ToHexString(SHA256.HashData(payload));
+    }
+
+    private static JsonObject Fixture()
+    {
+        var now = DateTimeOffset.UtcNow;
+        JsonArray Windows(int sample) => new(
+            new JsonObject { ["bucket"] = "codex", ["window"] = "primary", ["durationMinutes"] = 300,
+                ["remainingPercent"] = sample < 144 ? 100 - sample * 0.4 : 100 - (sample - 144) * 0.3,
+                ["resetsAt"] = (sample < 144 ? now.AddHours(-12) : now.AddHours(1)).ToString("O") },
+            new JsonObject { ["bucket"] = "codex", ["window"] = "secondary", ["durationMinutes"] = 10080,
+                ["remainingPercent"] = 70 - sample * 0.04, ["resetsAt"] = now.AddDays(3).ToString("O") },
+            new JsonObject { ["bucket"] = "example", ["window"] = "primary", ["durationMinutes"] = 300,
+                ["remainingPercent"] = 20 - sample * 0.02, ["resetsAt"] = now.AddHours(2).ToString("O") },
+            new JsonObject { ["bucket"] = "codex_bengalfox", ["window"] = "primary", ["durationMinutes"] = 300,
+                ["remainingPercent"] = 100 });
+        var history = new JsonArray();
+        for (var index = 0; index <= 288; index++)
+            if (index <= 50 || index >= 56)
+                history.Add(new JsonObject { ["checkedAt"] = now.AddMinutes((index - 288) * 5).ToString("O"), ["windows"] = Windows(index) });
+        var daily = new JsonArray();
+        for (var index = 0; index < 14; index++)
+            daily.Add(new JsonObject { ["startDate"] = now.AddDays(index - 13).ToString("yyyy-MM-dd"), ["tokens"] = 120000 + index * 17000 });
+        return new JsonObject { ["schema"] = 2, ["collectedAt"] = now.ToString("O"),
+            ["quota"] = new JsonObject { ["status"] = "ok", ["checkedAt"] = now.ToString("O"), ["windows"] = Windows(288),
+                ["history"] = history, ["dailyUsageBuckets"] = daily }, ["activity"] = new JsonArray(), ["tokens"] = new JsonArray() };
+    }
+}

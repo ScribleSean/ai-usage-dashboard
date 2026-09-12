@@ -5,9 +5,14 @@ import {EventEmitter} from 'node:events';
 import {PassThrough,Writable} from 'node:stream';
 import {createHmac} from 'node:crypto';
 test('quota adapter preserves separate buckets and drops account and credit details', () => {
-  const result=cleanQuota({accountId:'PRIVATE',credits:{secret:'PRIVATE'},rateLimitsByLimitId:{codex:{primary:{usedPercent:25,windowDurationMins:300,resetsAt:1800000000}},spark:{secondary:{usedPercent:80,windowDurationMins:10080}}}});
+  const result=cleanQuota({accountId:'PRIVATE',credits:{secret:'PRIVATE'},rateLimitsByLimitId:{codex:{primary:{usedPercent:25,windowDurationMins:300,resetsAt:1800000000}},example:{secondary:{usedPercent:80,windowDurationMins:10080}}}});
   assert.equal(result.windows.length,2); assert.equal(result.windows[0].remainingPercent,75);
   assert.equal(JSON.stringify(result).includes('PRIVATE'),false);
+});
+test('retired Spark and Bengal-fox allowances are omitted without removing other limits',()=>{
+  const bucket={primary:{usedPercent:25}};
+  const result=cleanQuota({rateLimitsByLimitId:{codex:bucket,codex_bengalfox:bucket,spark:bucket,CODEX_SPARK:bucket}});
+  assert.deepEqual(result.windows.map(row=>row.bucket),['codex']);
 });
 test('invalid quota values stay unavailable', () => {
   assert.equal(cleanQuota({rateLimits:{primary:{usedPercent:'25'}}}).status,'unavailable');

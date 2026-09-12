@@ -13,7 +13,7 @@ internal static class LoginStartup
         if (!Path.IsPathFullyQualified(executable) || executable.IndexOfAny(['"', '\r', '\n', '\0']) >= 0 ||
             !string.Equals(Path.GetExtension(executable), ".exe", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("An absolute executable path is required.");
-        var command = $"\"{executable}\"";
+        var command = $"\"{executable}\" --background";
         if (command.Length > 260) throw new ArgumentException("The startup executable path is too long.");
         return command;
     }
@@ -43,7 +43,7 @@ internal static class LoginStartup
     internal static void SelfTest()
     {
         void Check(bool value) { if (!value) throw new InvalidOperationException("Startup contract failed."); }
-        Check(Command(@"C:\Program Files\Observatory\WorkspaceObservatory.exe") == "\"C:\\Program Files\\Observatory\\WorkspaceObservatory.exe\"");
+        Check(Command(@"C:\Program Files\Observatory\WorkspaceObservatory.exe") == "\"C:\\Program Files\\Observatory\\WorkspaceObservatory.exe\" --background");
         foreach (var invalid in new[] { "relative.exe", "C:\\bad\"name.exe", "C:\\script.cmd", "C:\\" + new string('a', 260) + ".exe" })
         {
             var rejected = false;

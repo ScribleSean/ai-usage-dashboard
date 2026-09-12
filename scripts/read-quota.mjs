@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createHmac } from 'node:crypto';
+import {visibleQuotaBucket} from './quota-buckets.mjs';
 
 export function cleanQuota(result) {
   if (!result || typeof result !== 'object' || Array.isArray(result)) throw Error('Invalid quota response');
@@ -7,7 +8,7 @@ export function cleanQuota(result) {
   const buckets = result.rateLimitsByLimitId || (result.rateLimits ? {default:result.rateLimits} : {});
   if(typeof buckets!=='object' || Array.isArray(buckets) || Object.keys(buckets).length>16)throw Error('Invalid quota buckets');
   for (const [id, bucket] of Object.entries(buckets)) {
-    if (!/^[a-zA-Z0-9_-]{1,80}$/.test(id)) continue;
+    if (!/^[a-zA-Z0-9_-]{1,80}$/.test(id) || !visibleQuotaBucket(id)) continue;
     for (const name of ['primary','secondary']) {
       const w = bucket?.[name];
       if (!w || typeof w.usedPercent !== 'number' || !Number.isFinite(w.usedPercent) || w.usedPercent < 0 || w.usedPercent > 100) continue;

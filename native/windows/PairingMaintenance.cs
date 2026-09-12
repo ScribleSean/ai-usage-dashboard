@@ -4,17 +4,20 @@ namespace WorkspaceObservatory;
 
 internal static class PairingMaintenance
 {
-    internal static async Task Disconnect(string runtime, CancellationToken cancellation = default)
+    internal static Task Disconnect(string runtime, CancellationToken cancellation = default) => Run(runtime, false, cancellation);
+    internal static Task PrepareRepair(string runtime, CancellationToken cancellation = default) => Run(runtime, true, cancellation);
+
+    private static async Task Run(string runtime, bool repair, CancellationToken cancellation)
     {
         if (!Path.IsPathFullyQualified(runtime) || !Directory.Exists(runtime) ||
             (File.GetAttributes(runtime) & FileAttributes.ReparsePoint) != 0)
             throw new InvalidOperationException("Private runtime unavailable.");
         var node = Path.Combine(AppContext.BaseDirectory, "Runtime", "node.exe");
-        var script = Path.Combine(AppContext.BaseDirectory, "Collector", "scripts", "peer-revocation.mjs");
+        var script = Path.Combine(AppContext.BaseDirectory, "Collector", "scripts", repair ? "peer-repair.mjs" : "peer-revocation.mjs");
         if (!File.Exists(node) || !File.Exists(script)) throw new InvalidOperationException("Bundled pairing tools unavailable.");
         using var process = new Process { StartInfo = new ProcessStartInfo(node)
             { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true } };
-        foreach (var argument in new[] { script, "--runtime", Path.GetFullPath(runtime), "--revoke" })
+        foreach (var argument in new[] { script, "--runtime", Path.GetFullPath(runtime), repair ? "--confirm-local-retirement" : "--revoke" })
             process.StartInfo.ArgumentList.Add(argument);
         process.Start();
         var output = process.StandardOutput.ReadToEndAsync();
@@ -29,7 +32,7 @@ internal static class PairingMaintenance
             throw;
         }
         await Task.WhenAll(output, error);
-        if (process.ExitCode != 0) throw new InvalidOperationException("Private pairing revocation could not be verified.");
+        if (process.ExitCode != 0) throw new InvalidOperationException("Private pairing maintenance could not be verified.");
     }
 
     internal static void SelfTest()
@@ -45,6 +48,12 @@ internal static class PairingMaintenance
             if (!File.Exists(Path.Combine(runtime, "private-sync", "revoked")) || File.ReadAllText(sentinel) != "preserve")
                 throw new InvalidOperationException("Native pairing revocation self-test failed.");
             Console.WriteLine("Native pairing revocation self-test passed with temporary data.");
+            PrepareRepair(runtime).GetAwaiter().GetResult();
+            var backups = Directory.GetDirectories(runtime, "private-sync-retired-*");
+            if (backups.Length != 1 || !File.Exists(Path.Combine(backups[0], "revoked")) ||
+                Directory.Exists(Path.Combine(runtime, "private-sync")) || File.ReadAllText(sentinel) != "preserve")
+                throw new InvalidOperationException("Native repair preparation self-test failed.");
+            Console.WriteLine("Native repair preparation self-test passed with a retained disabled backup.");
         }
         finally { Directory.Delete(runtime, recursive: true); }
     }
