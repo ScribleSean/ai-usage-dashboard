@@ -8,12 +8,26 @@ import {parsePeerPayload} from './peer-payload.mjs';
 import {selectPeerRevision} from './peer-revision.mjs';
 import {privateSyncDirectory} from './peer-directory.mjs';
 import {assertPeerNotRevoked} from './peer-revocation.mjs';
+import {withPeerStateLock} from './peer-lock.mjs';
+import {readPairing} from './peer-pairing.mjs';
 
 const limit=17_000_000;
 const schema="CREATE TABLE peer_state (slot TEXT PRIMARY KEY CHECK (slot IN ('local', 'peer')), record TEXT NOT NULL CHECK (length(record) <= 17000000))";
 const digest=payload=>createHash('sha256').update(JSON.stringify(payload)).digest('hex');
 const missing=error=>error.code==='ENOENT';
 const validSlot=slot=>{if(!['local','peer'].includes(slot))throw Error('Invalid peer state slot');};
+
+// Once any generation has been retired, an absent or different active pairing
+// must never be treated as an empty database for an old in-memory collector.
+export async function assertCurrentPeerConfig(runtime,config,slot='local') {
+  validSlot(slot);
+  try {await lstat(path.join(runtime,'private-repair','require-pairing'));}
+  catch(error) {if(missing(error))return;throw error;}
+  const active=(await readPairing(runtime))?.[slot];
+  const keys=['pairId','deviceId','comparisonId','host','codexHosts'];
+  if(!active || !keys.every(key=>isDeepStrictEqual(active[key],config[key])))
+    throw Error('Retired or unavailable pairing generation');
+}
 
 async function locations(runtime,create=false) {
   const directory=await privateSyncDirectory(runtime,create);
@@ -95,8 +109,11 @@ export function createPeerRecord(payload,config,sequence,now=Date.now()) {
     comparisonId:config.comparisonId,host:config.host,sequence,collectedAt:safe.collectedAt,digest:digest(safe)}},config,now);
 }
 
-export async function readPeerState(runtime,config,now=Date.now(),slot='peer') {
+export const readPeerState=(runtime,config,now=Date.now(),slot='peer')=>
+  withPeerStateLock(runtime,()=>readPeerStateLocked(runtime,config,now,slot));
+async function readPeerStateLocked(runtime,config,now,slot) {
   validSlot(slot);
+  await assertCurrentPeerConfig(runtime,config,slot);
   let db;
   try {
     try{db=await database(runtime,false);}catch(error){if(missing(error))return null;throw error;}
@@ -107,7 +124,10 @@ export async function readPeerState(runtime,config,now=Date.now(),slot='peer') {
 
 // Allocate the local sequence under the same writer transaction as the payload.
 // Callers must not implement read-then-increment outside this transaction.
-export async function publishLocalPayload(runtime,payload,config,now=Date.now()) {
+export const publishLocalPayload=(runtime,payload,config,now=Date.now())=>
+  withPeerStateLock(runtime,()=>publishLocalPayloadLocked(runtime,payload,config,now));
+async function publishLocalPayloadLocked(runtime,payload,config,now) {
+  await assertCurrentPeerConfig(runtime,config,'local');
   const safe=parsePeerPayload(JSON.stringify(payload),config,now);
   let db;
   try {
@@ -128,8 +148,11 @@ export async function publishLocalPayload(runtime,payload,config,now=Date.now())
 // Authenticated identity comes from the caller, not from the content digest.
 // SQLite owns writer exclusion and process-crash recovery. Use a local disk,
 // never an SMB or synchronized network directory.
-export async function acceptPeerState(runtime,incoming,config,now=Date.now(),slot='peer') {
+export const acceptPeerState=(runtime,incoming,config,now=Date.now(),slot='peer')=>
+  withPeerStateLock(runtime,()=>acceptPeerStateLocked(runtime,incoming,config,now,slot));
+async function acceptPeerStateLocked(runtime,incoming,config,now,slot) {
   validSlot(slot);
+  await assertCurrentPeerConfig(runtime,config,slot);
   const candidate=validate(incoming,config,now);
   let db;
   try {

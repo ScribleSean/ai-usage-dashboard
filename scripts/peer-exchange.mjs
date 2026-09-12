@@ -2,10 +2,13 @@ import {fileURLToPath} from 'node:url';
 import {readPairing} from './peer-pairing.mjs';
 import {readPeerState,acceptPeerState} from './peer-store.mjs';
 import {assertPairingActive} from './peer-revocation.mjs';
+import {withPeerStateLock} from './peer-lock.mjs';
 
 // This is a local stdin/stdout endpoint for an authenticated SSH session, not a
 // network listener. Its caller must authenticate the remote host and account.
-export async function exchangePeerRecord(runtime,request,now=Date.now()) {
+export const exchangePeerRecord=(runtime,request,now=Date.now())=>
+  withPeerStateLock(runtime,()=>exchangePeerRecordLocked(runtime,request,now));
+async function exchangePeerRecordLocked(runtime,request,now) {
   if(!request || typeof request!=='object' || Array.isArray(request) || request.version!==1 ||
     Object.keys(request).length!==2 || !Object.hasOwn(request,'record'))throw Error('Invalid exchange request');
   const pairing=await readPairing(runtime);

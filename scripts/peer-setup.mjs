@@ -5,9 +5,11 @@ import {fileURLToPath} from 'node:url';
 import {isDeepStrictEqual} from 'node:util';
 import {createPairingConfigurations,validatePairing,readPairing,readPendingPairing,
   preparePendingPairing,activatePendingPairing} from './peer-pairing.mjs';
-import {validatePeerTransport,sshPeerSetup} from './peer-transport.mjs';
+import {validatePeerTransport,sshPeerSetup,sshPeerRepairReadiness} from './peer-transport.mjs';
 import {assertPairingActive} from './peer-revocation.mjs';
 import {privateSyncDirectory} from './peer-directory.mjs';
+import {withPeerStateLock} from './peer-lock.mjs';
+import {readRepairConsent,validRepairNonce} from './peer-repair-consent.mjs';
 
 // A native form may prefill its target, but never receives pairing identities,
 // comparison salts, snapshot records or raw error details.
@@ -15,6 +17,7 @@ export async function setupStatus(runtime,platform=process.platform) {
   try {
     if(platform!=='darwin' || typeof runtime!=='string' || !path.isAbsolute(runtime) ||
       path.resolve(runtime)!==await realpath(runtime))throw Error('Canonical Mac runtime required');
+    await readRepairConsent(runtime);
     const pending=await readPendingPairing(runtime),active=await readPairing(runtime);
     if(pending && active && !isDeepStrictEqual(pending,active))throw Error('Conflicting setup state');
     const pair=pending??active;
@@ -36,24 +39,33 @@ export function complementaryWindowsPairing(mac) {
   const safe=validatePairing(mac);
   if(safe.local.host!=='Mac' || !safe.transport)throw Error('Mac setup pairing required');
   const {comparisonSalt,...peer}=safe.local;
-  return validatePairing({version:1,local:{...safe.peer,comparisonSalt},peer});
+  return validatePairing({version:1,local:{...safe.peer,comparisonSalt},peer,...(safe.repair?{repair:safe.repair}:{})});
 }
 
 // Explicit setup only. Normal collectors never call this or create a pairing.
-export async function setupPairing(runtime,request,send=sshPeerSetup,platform=process.platform) {
+export const setupPairing=(runtime,request,send=sshPeerSetup,platform=process.platform,readiness=sshPeerRepairReadiness)=>
+  withPeerStateLock(runtime,()=>setupPairingLocked(runtime,request,send,platform,readiness));
+async function setupPairingLocked(runtime,request,send,platform,readiness) {
   if(platform!=='darwin' || !request || typeof request!=='object' || Array.isArray(request) ||
     Object.keys(request).length!==2 || !Object.hasOwn(request,'transport') || typeof request.includeUbuntu!=='boolean')
     throw Error('Explicit Mac setup request required');
   const transport=validatePeerTransport(request.transport);
+  const localConsent=await readRepairConsent(runtime);
   let pending=await readPendingPairing(runtime),active=await readPairing(runtime);
   if(pending && active && !isDeepStrictEqual(pending,active))throw Error('Conflicting setup state');
   let pair=pending??active;
   if(!pair) {
     const desired=createPairingConfigurations(request.includeUbuntu).Mac;
     desired.transport=transport;
+    if(localConsent) {
+      const peerConsent=await readiness(transport);
+      if(!validRepairNonce(peerConsent))throw Error('Windows repair confirmation unavailable');
+      desired.repair={mac:localConsent,windows:peerConsent};
+    }
     try {pair=await preparePendingPairing(runtime,desired);}
     catch(error) {pair=await readPendingPairing(runtime);if(!pair)throw error;}
   }
+  if(localConsent && pair.repair?.mac!==localConsent)throw Error('Current Mac repair confirmation required');
   if(pair.local.host!=='Mac' || !isDeepStrictEqual(pair.transport,transport) ||
     (pair.peer.codexHosts.length===2)!==request.includeUbuntu)throw Error('Retry requires the original setup target and source scope');
   await assertPairingActive(runtime);

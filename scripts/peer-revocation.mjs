@@ -3,6 +3,7 @@ import {constants,realpathSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {privateSyncDirectory} from './peer-directory.mjs';
+import {withPeerStateLock} from './peer-lock.mjs';
 
 const marker='revoked';
 
@@ -20,7 +21,8 @@ export async function assertPairingActive(runtime) {
 
 // Local disable only. Stop collectors/exchanges on both devices first when an
 // immediate cutoff is needed. Bytes already sent cannot be recalled.
-export async function revokePairing(runtime) {
+export const revokePairing=runtime=>withPeerStateLock(runtime,()=>revokePairingLocked(runtime));
+async function revokePairingLocked(runtime) {
   const directory=await privateSyncDirectory(runtime,true);
   const name=path.join(directory,marker);
   let file;

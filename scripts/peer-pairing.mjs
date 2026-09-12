@@ -7,12 +7,16 @@ import {privateSyncDirectory} from './peer-directory.mjs';
 import {preparePeerCollection} from './peer-collection.mjs';
 import {validatePeerTransport} from './peer-transport.mjs';
 import {assertPeerNotRevoked} from './peer-revocation.mjs';
+import {withPeerStateLock} from './peer-lock.mjs';
+import {validRepairNonce,readRepairConsent} from './peer-repair-consent.mjs';
 
 const exact=(value,keys)=>value && typeof value==='object' && !Array.isArray(value) &&
   Object.keys(value).length===keys.length && Object.keys(value).every(key=>keys.includes(key));
 const hosts=host=>host==='Mac'?['Mac']:['Windows'];
 export function validatePairing(value) {
-  if(!(exact(value,['version','local','peer']) || exact(value,['version','local','peer','transport'])) || value.version!==1 ||
+  if(!value || typeof value!=='object' || Array.isArray(value) ||
+    !['version','local','peer'].every(key=>Object.hasOwn(value,key)) ||
+    Object.keys(value).some(key=>!['version','local','peer','transport','repair'].includes(key)) || value.version!==1 ||
     !exact(value.peer,['pairId','deviceId','comparisonId','host','codexHosts']))throw Error('Invalid private pairing');
   const local=value.local,peer=value.peer;
   const configured=source=>source.host==='Windows' && source.codexHosts?.length===2?['Windows','Ubuntu']:hosts(source.host);
@@ -24,6 +28,11 @@ export function validatePairing(value) {
   if(Object.hasOwn(value,'transport')) {
     if(local.host!=='Mac' || peer.host!=='Windows')throw Error('Unsupported transport direction');
     result.transport=validatePeerTransport(value.transport);
+  }
+  if(Object.hasOwn(value,'repair')) {
+    if(!exact(value.repair,['mac','windows']) || !validRepairNonce(value.repair.mac) ||
+      !validRepairNonce(value.repair.windows) || value.repair.mac===value.repair.windows)throw Error('Invalid repair confirmations');
+    result.repair={mac:value.repair.mac,windows:value.repair.windows};
   }
   return result;
 }
@@ -40,8 +49,10 @@ export function createPairingConfigurations(includeUbuntu=false) {
     Windows:validatePairing({version:1,local:{...windows,comparisonSalt},peer:mac})};
 }
 
-export async function initializePairing(runtime,value) {
+export const initializePairing=(runtime,value)=>withPeerStateLock(runtime,()=>initializePairingLocked(runtime,value));
+async function initializePairingLocked(runtime,value) {
   const safe=validatePairing(value),bytes=JSON.stringify(safe);
+  await checkLocalRepairConsent(runtime,safe);
   if(Buffer.byteLength(bytes)>4096)throw Error('Private pairing size limit');
   const directory=await privateSyncDirectory(runtime,true);
   if((await readdir(directory)).length)throw Error('Private state already exists; explicit repair or rotation required');
@@ -49,6 +60,12 @@ export async function initializePairing(runtime,value) {
   try {await file.writeFile(bytes);await file.sync();}finally{await file.close();}
   // Check the resulting inherited Windows ACL before any collector uses it.
   await privateSyncDirectory(runtime);
+}
+
+async function checkLocalRepairConsent(runtime,pairing) {
+  const nonce=await readRepairConsent(runtime);
+  if((nonce || pairing.repair) && (!nonce || pairing.repair?.[pairing.local.host==='Mac'?'mac':'windows']!==nonce))
+    throw Error('Current local repair confirmation required');
 }
 
 async function readPairingFile(runtime,filename) {
@@ -67,7 +84,9 @@ async function readPairingFile(runtime,filename) {
     const bytes=Buffer.alloc(4097),{bytesRead}=await file.read(bytes,0,bytes.length,0);
     const after=await file.stat();
     if(bytesRead!==before.size || after.size!==before.size || after.mtimeMs!==before.mtimeMs)throw Error('Changing private pairing file');
-    return validatePairing(JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes.subarray(0,bytesRead))));
+    const safe=validatePairing(JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes.subarray(0,bytesRead))));
+    await checkLocalRepairConsent(runtime,safe);
+    return safe;
   } finally {await file.close();}
 }
 
@@ -83,8 +102,10 @@ async function writeSetupFile(directory,name,value) {
 
 // Pending state is not consumed by collectors. A failed remote acknowledgement
 // leaves the same generation available for an explicit retry.
-export async function preparePendingPairing(runtime,value) {
+export const preparePendingPairing=(runtime,value)=>withPeerStateLock(runtime,()=>preparePendingPairingLocked(runtime,value));
+async function preparePendingPairingLocked(runtime,value) {
   const safe=validatePairing(value);
+  await checkLocalRepairConsent(runtime,safe);
   if(safe.local.host!=='Mac' || !safe.transport)throw Error('Mac setup transport required');
   const directory=await privateSyncDirectory(runtime,true);
   await assertPeerNotRevoked(directory);
@@ -97,8 +118,10 @@ export async function preparePendingPairing(runtime,value) {
 // Only call after the authenticated peer acknowledged this exact generation.
 // Exclusive creation prevents overwriting an active or partially written file.
 // A corrupt partial file needs explicit repair; it is never silently replaced.
-export async function activatePendingPairing(runtime,expected) {
+export const activatePendingPairing=(runtime,expected)=>withPeerStateLock(runtime,()=>activatePendingPairingLocked(runtime,expected));
+async function activatePendingPairingLocked(runtime,expected) {
   const safe=validatePairing(expected),directory=await privateSyncDirectory(runtime);
+  await checkLocalRepairConsent(runtime,safe);
   await assertPeerNotRevoked(directory);
   let active=await readPairing(runtime),pending=await readPendingPairing(runtime);
   if(active && !isDeepStrictEqual(active,safe))throw Error('Conflicting active pairing');

@@ -25,7 +25,7 @@ test('private state commits payload and watermark together outside dashboard fil
   assert.equal((await acceptPeerState(runtime,record(1),config,now)).action,'replace');
   const stored=await readPeerState(runtime,config,now);
   assert.deepEqual(stored,record(1));
-  assert.deepEqual(await readdir(runtime),['private-sync']);
+  assert.deepEqual(await readdir(runtime),['private-repair','private-sync']);
   assert.deepEqual(await readdir(path.join(runtime,'private-sync')),['state.sqlite']);
   if(process.platform!=='win32') {
     assert.equal((await stat(path.join(runtime,'private-sync'))).mode&0o077,0);

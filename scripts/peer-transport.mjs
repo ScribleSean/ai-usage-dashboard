@@ -57,3 +57,11 @@ export async function sshPeerSetup(transport,pairing,invoke=runSSH) {
     Object.keys(response).length!==2 || response.status!=='ready')throw Error('Invalid private setup response');
   return response;
 }
+
+export async function sshPeerRepairReadiness(transport,invoke=runSSH) {
+  const response=await sshRequest(transport,{version:1,action:'repair-readiness'},'setup',invoke,8192);
+  if(!response || typeof response!=='object' || Array.isArray(response) || response.version!==1 ||
+    Object.keys(response).length!==3 || response.status!=='repair-ready' ||
+    typeof response.nonce!=='string' || !/^[a-f0-9]{64}$/.test(response.nonce))throw Error('Invalid repair readiness response');
+  return response.nonce;
+}

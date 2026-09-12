@@ -6,12 +6,13 @@ import {assertPairingActive} from './peer-revocation.mjs';
 export async function finalizePeerCollection(runtime,result,pairing,previous=[],now=Date.now()) {
   if(!pairing || result.peer?.status!=='ready')return result;
   try {
-    const {publishLocalPayload,readPeerState,acceptPeerState}=await import('./peer-store.mjs');
+    const {publishLocalPayload,readPeerState,acceptPeerState,assertCurrentPeerConfig}=await import('./peer-store.mjs');
     const local=await publishLocalPayload(runtime,result.peer.payload,pairing.local,now);
     let transport='not-configured';
     if(pairing.transport && process.platform==='darwin') {
       try {
         await assertPairingActive(runtime);
+        await assertCurrentPeerConfig(runtime,pairing.local);
         const incoming=await sshPeerExchange(pairing.transport,local);
         await acceptPeerState(runtime,incoming,pairing.peer,Date.now());
         transport='ok';
@@ -19,6 +20,7 @@ export async function finalizePeerCollection(runtime,result,pairing,previous=[],
     }
     const peer=await readPeerState(runtime,pairing.peer,now);
     await assertPairingActive(runtime);
+    await assertCurrentPeerConfig(runtime,pairing.local);
     if(peer)result.data=mergePeerPayloads(local.payload,peer.payload,pairing.local,pairing.peer,previous,now);
     result.peer={status:peer?'merged':'waiting',sequence:local.revision.sequence,transport};
   } catch {result.peer={status:'unavailable'};}

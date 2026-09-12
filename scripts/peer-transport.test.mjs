@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {validatePeerTransport,sshPeerExchange,sshPeerSetup} from './peer-transport.mjs';
+import {validatePeerTransport,sshPeerExchange,sshPeerSetup,sshPeerRepairReadiness} from './peer-transport.mjs';
 import {createPairingConfigurations,validatePairing} from './peer-pairing.mjs';
 
 const transport=()=>({kind:'ssh-windows',hostAlias:'windows-codex',remoteNode:'C:/Apps/Observatory/node.exe',
@@ -44,4 +44,25 @@ test('setup uses only the fixed sibling endpoint and sends private configuration
   });
   assert.deepEqual(result,{version:1,status:'ready'});
   await assert.rejects(sshPeerSetup(transport(),pairing,async()=>'{"version":1,"status":"ready","extra":true}'));
+});
+
+test('repair readiness only queries the setup endpoint and rejects malformed confirmations',async()=>{
+  const nonce='a'.repeat(64);
+  const valid={version:1,status:'repair-ready',nonce};
+  assert.equal(await sshPeerRepairReadiness(transport(),async(args,input)=>{
+    const command=Buffer.from(args.at(-1).split(' ').at(-1),'base64').toString('utf16le');
+    assert.ok(command.includes('peer-setup-endpoint.mjs'));
+    assert.ok(!command.includes('peer-repair.mjs'));
+    assert.ok(!command.includes('--confirm-local-retirement'));
+    assert.ok(args.includes('StrictHostKeyChecking=yes'));
+    assert.ok(args.includes('BatchMode=yes'));
+    assert.deepEqual(JSON.parse(input),{version:1,action:'repair-readiness'});
+    return JSON.stringify(valid);
+  }),nonce);
+  for(const response of [null,[],{...valid,version:2},{...valid,status:'ready'},
+    {...valid,nonce:'PRIVATE'},{...valid,nonce:'A'.repeat(64)},{...valid,extra:true}]) {
+    await assert.rejects(sshPeerRepairReadiness(transport(),async()=>JSON.stringify(response)));
+  }
+  await assert.rejects(sshPeerRepairReadiness(transport(),async()=>'x'.repeat(8193)),/response limit/);
+  await assert.rejects(sshPeerRepairReadiness(transport(),async()=>{throw Error('offline');}),/offline/);
 });
