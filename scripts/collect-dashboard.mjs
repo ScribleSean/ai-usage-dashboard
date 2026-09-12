@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { cleanIntervals, summarizeTracked, appLabel } from './activity-timeline.mjs';
 import { estimate } from './api-estimate.mjs';
-import { readQuota } from './read-quota.mjs';
+import { collectLegacyQuota } from './legacy-quota.mjs';
 import { pythonReport } from './python-report.mjs';
 import { readSettingsSnapshot } from './settings-snapshot.mjs';
 import { combineTokens, combineSettings } from './combine-tokens.mjs';
@@ -223,7 +223,7 @@ export async function collect() {
     readTokens('Mac'),
     readTokens('Ubuntu'),
     readTokens('Windows'),
-    config.codexExecutable ? guarded('Codex', () => readQuota(config.codexExecutable)) : Promise.resolve({status:'not-connected'}),
+    guarded('Codex', () => collectLegacyQuota(root)),
     config.localModelResults ? guarded('Ubuntu', async () => {
       const raw=await pythonReport(config.ubuntuHost, await readFile(path.join(root,'scripts/read-local-model.py'),'utf8'),config.localModelResults);
       if (!Array.isArray(raw.records)) throw Error('Invalid local receipts');
