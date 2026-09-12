@@ -190,7 +190,9 @@ Section "Uninstall"
   ClearErrors
   ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${STARTUP_NAME}"
   ClearErrors
-  StrCmp $0 '"$INSTDIR\WorkspaceObservatory.exe"' 0 preserve_startup
+  StrCmp $0 '"$INSTDIR\WorkspaceObservatory.exe"' remove_startup
+  StrCmp $0 '"$INSTDIR\WorkspaceObservatory.exe" --background' 0 preserve_startup
+  remove_startup:
     DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${STARTUP_NAME}"
   preserve_startup:
   !include "remove-registration.nsh"

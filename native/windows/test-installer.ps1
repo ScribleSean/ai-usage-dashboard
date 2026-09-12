@@ -105,7 +105,7 @@ try {
 
     [IO.File]::WriteAllText((Join-Path $install 'unrelated-test.txt'), 'preserve')
     [IO.File]::WriteAllText((Join-Path $shortcuts 'unrelated-test.txt'), 'preserve')
-    $run.SetValue($startupName, ('"' + $install + '\WorkspaceObservatory.exe"'))
+    $run.SetValue($startupName, ('"' + $install + '\WorkspaceObservatory.exe" --background'))
     Invoke-TestUninstall
     Check (-not (Test-Path (Join-Path $install 'WorkspaceObservatory.exe'))) 'Application executable remains.'
     Check ((Get-ChildItem -LiteralPath $install -Force).Count -eq 1) 'Unexpected files remain after uninstall.'
